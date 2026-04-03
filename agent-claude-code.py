@@ -58,6 +58,8 @@ SYSTEM_PROMPT = """You are a highly capable task-completion agent working inside
 
 MODEL = "sonnet"
 MAX_TURNS = 30
+MAX_BUDGET_USD = 1.0
+TIMEOUT_SEC = 540
 PERMISSION_MODE = "bypassPermissions"
 ALLOWED_TOOLS: list[str] = []
 CLI_EXTRA_FLAGS: list[str] = []
@@ -72,6 +74,7 @@ def build_cli_args(instruction_text: str) -> list[str]:
         "--verbose",
         "--model", MODEL,
         "--max-turns", str(MAX_TURNS),
+        "--max-budget-usd", str(MAX_BUDGET_USD),
         "--permission-mode", PERMISSION_MODE,
     ]
     if SYSTEM_PROMPT:
@@ -283,7 +286,7 @@ class AutoAgent(BaseAgent):
                     cli_args,
                     capture_output=True,
                     text=True,
-                    timeout=540,
+                    timeout=TIMEOUT_SEC,
                     cwd=str(task_dir),
                 )
                 duration_ms = int((time.time() - t0) * 1000)
@@ -303,8 +306,8 @@ class AutoAgent(BaseAgent):
                     if isinstance(exc.stdout, bytes)
                     else (exc.stdout or "")
                 )
-                stderr_output = "ERROR: claude CLI timed out after 540s"
-                logger.error("claude CLI timed out after 540s (partial output preserved)")
+                stderr_output = f"ERROR: claude CLI timed out after {TIMEOUT_SEC}s"
+                logger.error("claude CLI timed out after %ds (partial output preserved)", TIMEOUT_SEC)
             except FileNotFoundError:
                 duration_ms = int((time.time() - t0) * 1000)
                 raw_output = ""

@@ -18,9 +18,16 @@ Evaluation is done by task-specific verifiers.
 
 ## Architecture
 
-This variant uses Claude Code CLI (`claude`) as a subprocess rather than a
-direct SDK call. The CLI handles tool execution, file operations, and shell
-commands internally. The harness controls:
+This variant runs the Claude Code CLI on the **host machine** (not inside the
+container) using the user's existing OAuth session. The CLI handles tool
+execution, file operations, and shell commands internally. The adapter syncs
+task files from the container to a host temp directory, runs `claude`, then
+syncs results back for verification.
+
+**Security note:** Because the CLI runs on the host with `bypassPermissions`,
+it can access any host file or network resource. Only run on trusted task sets.
+
+The harness controls:
 
 - **System prompt**: what instructions the agent receives
 - **Model selection**: which Claude model to use
@@ -30,9 +37,7 @@ commands internally. The harness controls:
 ## Prerequisites
 
 - Claude Code CLI installed on the host: `npm install -g @anthropic-ai/claude-code`
-- Authenticated: `claude login` (or already logged in — no API key needed)
-- The adapter automatically copies your `~/.claude` auth credentials into the
-  container at runtime.
+- Authenticated: `claude login` (no API key needed — uses your subscription)
 
 ## Setup
 
@@ -86,8 +91,8 @@ docker build -f Dockerfile.claude-code -t autoagent-base .
 rm -rf jobs && mkdir -p jobs && uv run harbor run -p tasks/ -n 100 --agent-import-path agent-claude-code:AutoAgent -o jobs --job-name latest > run.log 2>&1
 ```
 
-No `.env` file or API key needed — the adapter copies your local Claude auth
-into the container automatically.
+No `.env` file or API key needed — the CLI runs on the host and uses your
+existing Claude Code session directly.
 
 ## Goal, Logging, Experiment Loop, Keep/Discard Rules
 

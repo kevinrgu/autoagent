@@ -4,9 +4,13 @@ Claude Code CLI adapter for Harbor.
 Runs the locally-installed `claude` CLI on the HOST machine (not inside Docker).
 No API key needed — uses your existing Claude Code OAuth session.
 
+SECURITY NOTE: Unlike the SDK-based adapters that run inside containers, this
+adapter executes `claude` on the host with bypassPermissions. The CLI can access
+any host file/network resource. Only run on trusted task sets.
+
 Prerequisites:
   - Claude Code CLI installed: npm install -g @anthropic-ai/claude-code
-  - Authenticated locally: claude login (or already logged in via claude.ai)
+  - Authenticated locally: claude login
 
 Run all tasks:
   docker build -f Dockerfile.claude-code -t autoagent-base .
@@ -17,11 +21,14 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import subprocess
 import tempfile
 import time
 from datetime import datetime, timezone
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 
 # ===========================================================================
@@ -51,11 +58,12 @@ SYSTEM_PROMPT = """You are a highly capable task-completion agent working inside
 
 MODEL = "sonnet"
 MAX_TURNS = 30
+PERMISSION_MODE = "bypassPermissions"
 ALLOWED_TOOLS: list[str] = []
 CLI_EXTRA_FLAGS: list[str] = []
 
 
-def build_cli_args(workdir: str, instruction_text: str) -> list[str]:
+def build_cli_args(instruction_text: str) -> list[str]:
     """Build the claude CLI argument list. Modify to change execution strategy."""
     args = [
         "claude",
@@ -64,7 +72,7 @@ def build_cli_args(workdir: str, instruction_text: str) -> list[str]:
         "--verbose",
         "--model", MODEL,
         "--max-turns", str(MAX_TURNS),
-        "--permission-mode", "bypassPermissions",
+        "--permission-mode", PERMISSION_MODE,
     ]
     if SYSTEM_PROMPT:
         args.extend(["--system-prompt", SYSTEM_PROMPT])
@@ -85,7 +93,10 @@ from harbor.models.agent.context import AgentContext  # noqa: E402
 
 
 def _parse_claude_json_output(raw: str) -> list[dict]:
-    """Parse Claude Code JSON output (newline-delimited JSON objects)."""
+    """Parse Claude Code NDJSON output (newline-delimited JSON objects).
+
+    Non-JSON lines (e.g. CLI error messages) are logged as warnings.
+    """
     messages = []
     for line in raw.strip().splitlines():
         line = line.strip()
@@ -94,12 +105,13 @@ def _parse_claude_json_output(raw: str) -> list[dict]:
         try:
             messages.append(json.loads(line))
         except json.JSONDecodeError:
-            continue
+            logger.warning("Non-JSON line in claude output: %s", line[:200])
     return messages
 
 
 def _to_atif(messages: list[dict], duration_ms: int) -> dict:
-    """Convert Claude Code stream-json output to an ATIF trajectory dict."""
+    """Convert Claude Code stream-json output to an ATIF (Agent Trajectory
+    Interchange Format) v1.6 trajectory dict."""
     steps: list[dict] = []
     step_id = 0
     now = datetime.now(timezone.utc).isoformat()
@@ -218,46 +230,10 @@ def _to_atif(messages: list[dict], duration_ms: int) -> dict:
     }
 
 
-async def _sync_dir_to_container(
-    local_dir: Path, container_path: str, environment: BaseEnvironment
-) -> None:
-    """Upload all files from a local directory into the container."""
-    for fpath in local_dir.rglob("*"):
-        if fpath.is_file():
-            rel = fpath.relative_to(local_dir)
-            target = f"{container_path}/{rel}"
-            parent = str(Path(target).parent)
-            await environment.exec(command=f"mkdir -p {parent}")
-            await environment.upload_file(source_path=fpath, target_path=target)
-
-
-async def _sync_container_to_dir(
-    container_path: str, local_dir: Path, environment: BaseEnvironment
-) -> None:
-    """Download files from the container into a local directory."""
-    result = await environment.exec(
-        command=f"find {container_path} -type f 2>/dev/null || true"
-    )
-    if not result.stdout or not result.stdout.strip():
-        return
-    for line in result.stdout.strip().splitlines():
-        line = line.strip()
-        if not line:
-            continue
-        rel = line.removeprefix(container_path).lstrip("/")
-        local_file = local_dir / rel
-        local_file.parent.mkdir(parents=True, exist_ok=True)
-        try:
-            await environment.download_file(
-                source_path=line, target_path=local_file
-            )
-        except Exception:
-            pass
-
-
 class AutoAgent(BaseAgent):
-    """Harbor agent adapter. Runs Claude Code CLI on the HOST,
-    syncs files to/from the container for verification."""
+    """Harbor agent adapter. Runs Claude Code CLI on the HOST in a temp
+    directory, syncing task files from the container beforehand and results
+    back afterward."""
 
     SUPPORTS_ATIF = True
 
@@ -283,30 +259,27 @@ class AutoAgent(BaseAgent):
             workdir = Path(tmpdir)
             task_dir = workdir / "task"
             task_dir.mkdir()
-            output_dir = task_dir / "output"
-            output_dir.mkdir()
 
-            # Write instruction
             instr_file = task_dir / "instruction.md"
             instr_file.write_text(instruction)
 
-            # Download any pre-existing files from the container's /task/
-            await _sync_container_to_dir("/task", task_dir, environment)
+            # Download pre-existing files from the container's /task/
+            await environment.download_dir(
+                source_dir="/task", target_dir=task_dir
+            )
 
             # 2. Rewrite absolute /task/ paths to the temp workdir path
             #    so claude writes files to the correct location
             task_prefix = str(task_dir)
             local_instruction = instruction.replace("/task/", f"{task_prefix}/")
 
-            # Run claude CLI on the HOST, pointed at the temp workdir
-            cli_args = build_cli_args(
-                str(workdir),
-                local_instruction,
-            )
+            cli_args = build_cli_args(local_instruction)
 
+            # 3. Run claude CLI on the HOST (async to avoid blocking event loop)
             t0 = time.time()
             try:
-                result = subprocess.run(
+                result = await asyncio.to_thread(
+                    subprocess.run,
                     cli_args,
                     capture_output=True,
                     text=True,
@@ -316,10 +289,22 @@ class AutoAgent(BaseAgent):
                 duration_ms = int((time.time() - t0) * 1000)
                 raw_output = result.stdout or ""
                 stderr_output = result.stderr or ""
-            except subprocess.TimeoutExpired:
+
+                if result.returncode != 0:
+                    logger.error(
+                        "claude CLI exited with code %d. stderr: %s",
+                        result.returncode,
+                        stderr_output[:500],
+                    )
+            except subprocess.TimeoutExpired as exc:
                 duration_ms = int((time.time() - t0) * 1000)
-                raw_output = ""
+                raw_output = (
+                    exc.stdout.decode("utf-8", errors="replace")
+                    if isinstance(exc.stdout, bytes)
+                    else (exc.stdout or "")
+                )
                 stderr_output = "ERROR: claude CLI timed out after 540s"
+                logger.error("claude CLI timed out after 540s (partial output preserved)")
             except FileNotFoundError:
                 duration_ms = int((time.time() - t0) * 1000)
                 raw_output = ""
@@ -327,37 +312,36 @@ class AutoAgent(BaseAgent):
                     "ERROR: claude CLI not found on host. "
                     "Install: npm install -g @anthropic-ai/claude-code"
                 )
+                logger.error("claude CLI not found on host")
 
-            # Save raw output for debugging
             if raw_output:
                 (self.logs_dir / "claude_raw_output.txt").write_text(raw_output)
             if stderr_output:
                 (self.logs_dir / "claude_stderr.txt").write_text(stderr_output)
 
-            # 3. Sync files created by claude back to the container
-            await _sync_dir_to_container(task_dir, "/task", environment)
+            # 4. Sync files created by claude back to the container
+            await environment.upload_dir(
+                source_dir=task_dir, target_dir="/task"
+            )
 
-            # 4. Build ATIF trajectory
+            # 5. Build ATIF trajectory
             messages = _parse_claude_json_output(raw_output)
             atif = _to_atif(messages, duration_ms)
 
             traj_path = self.logs_dir / "trajectory.json"
             traj_path.write_text(json.dumps(atif, indent=2))
 
-            # 5. Populate Harbor metrics
-            try:
-                fm = atif.get("final_metrics", {})
-                context.cost_usd = fm.get("total_cost_usd")
-                context.n_input_tokens = fm.get("total_prompt_tokens", 0)
-                context.n_output_tokens = fm.get("total_completion_tokens", 0)
-                context.n_cache_tokens = fm.get("total_cached_tokens", 0)
-            except Exception:
-                pass
+            # 6. Populate Harbor metrics
+            fm = atif.get("final_metrics", {})
+            context.cost_usd = fm.get("total_cost_usd")
+            context.n_input_tokens = fm.get("total_prompt_tokens", 0)
+            context.n_output_tokens = fm.get("total_completion_tokens", 0)
+            context.n_cache_tokens = fm.get("total_cached_tokens", 0)
 
-            cost = atif.get("final_metrics", {}).get("total_cost_usd") or 0
-            turns = atif.get("final_metrics", {}).get("extra", {}).get("num_turns", 0)
-            print(
-                f"cost_usd={cost:.4f} turns={turns} duration_ms={duration_ms}"
+            cost = fm.get("total_cost_usd") or 0
+            turns = fm.get("extra", {}).get("num_turns", 0)
+            logger.info(
+                "cost_usd=%.4f turns=%d duration_ms=%d", cost, turns, duration_ms
             )
 
 

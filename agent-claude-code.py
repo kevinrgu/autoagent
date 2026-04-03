@@ -59,7 +59,8 @@ def build_cli_args(instruction_path: str) -> list[str]:
     args = [
         "claude",
         "--print",
-        "--output-format", "json",
+        "--output-format", "stream-json",
+        "--verbose",
         "--model", MODEL,
         "--max-turns", str(MAX_TURNS),
         "--permission-mode", PERMISSION_MODE,
@@ -69,7 +70,8 @@ def build_cli_args(instruction_path: str) -> list[str]:
     for tool in ALLOWED_TOOLS:
         args.extend(["--allowedTools", tool])
     args.extend(CLI_EXTRA_FLAGS)
-    args.extend(["--prompt", f"Read the task at {instruction_path} and complete it."])
+    # Prompt is a positional argument in claude CLI
+    args.append(f"Read the task at {instruction_path} and complete it.")
     return args
 
 
@@ -97,18 +99,30 @@ def _parse_claude_json_output(raw: str) -> list[dict]:
 
 
 def _to_atif(messages: list[dict], duration_ms: int) -> dict:
-    """Convert Claude Code JSON output to an ATIF trajectory dict."""
+    """Convert Claude Code stream-json output to an ATIF trajectory dict.
+
+    Stream-json format (with --verbose) emits NDJSON with these types:
+    - system: init metadata (tools, model, session_id)
+    - assistant: content blocks (thinking, text, tool_use) — may arrive
+      as multiple messages for the same API response
+    - user: tool_result content blocks
+    - result: final summary with cost, usage, duration
+    - rate_limit_event: rate limit info (ignored)
+    """
     steps: list[dict] = []
     step_id = 0
     now = datetime.now(timezone.utc).isoformat()
 
-    total_input_tokens = 0
-    total_output_tokens = 0
-    total_cache_tokens = 0
     cost_usd = None
     session_id = "unknown"
     num_turns = 0
     model_name = MODEL
+    total_input_tokens = 0
+    total_output_tokens = 0
+    total_cache_tokens = 0
+
+    # Track pending tool_use blocks to pair with their results
+    pending_tools: dict[str, dict] = {}
 
     def _step(source: str, message: str, **extra: object) -> dict:
         nonlocal step_id
@@ -136,66 +150,68 @@ def _to_atif(messages: list[dict], duration_ms: int) -> dict:
                 elif block_type == "thinking":
                     reasoning = block.get("thinking", "")
                 elif block_type == "tool_use":
-                    pass
+                    tool_id = block.get("id", "")
+                    tool_name = block.get("name", "unknown")
+                    tool_input = block.get("input", {})
+                    pending_tools[tool_id] = {
+                        "tool_call_id": tool_id,
+                        "function_name": tool_name,
+                        "arguments": tool_input,
+                    }
             if texts or reasoning:
                 steps.append(_step(
                     "agent",
                     "\n".join(texts) or "(thinking)",
                     reasoning_content=reasoning,
-                    model_name=model_name,
+                    model_name=msg.get("message", {}).get("model", model_name),
                 ))
-            usage = msg.get("message", {}).get("usage", {})
-            total_input_tokens += usage.get("input_tokens", 0)
-            total_output_tokens += usage.get("output_tokens", 0)
-            total_cache_tokens += usage.get("cache_read_input_tokens", 0)
-            num_turns += 1
             if msg.get("message", {}).get("model"):
                 model_name = msg["message"]["model"]
             if msg.get("session_id"):
                 session_id = msg["session_id"]
 
-        elif msg_type == "tool_use":
-            tool_name = msg.get("tool_name", msg.get("name", "unknown"))
-            tool_input = msg.get("tool_input", msg.get("input", {}))
-            tool_id = msg.get("tool_use_id", msg.get("id", ""))
-            steps.append(_step(
-                "agent",
-                f"Tool: {tool_name}",
-                tool_calls=[{
-                    "tool_call_id": tool_id,
-                    "function_name": tool_name,
-                    "arguments": tool_input,
-                }],
-            ))
-
-        elif msg_type == "tool_result":
-            tool_id = msg.get("tool_use_id", "")
-            content = msg.get("content", "")
+        elif msg_type == "user":
+            # User messages contain tool_result blocks
+            content = msg.get("message", {}).get("content", [])
             if isinstance(content, list):
-                content = "\n".join(
-                    b.get("text", str(b)) for b in content
-                )
-            if steps and steps[-1].get("tool_calls"):
-                last_call = steps[-1]["tool_calls"][0]
-                steps[-1]["observation"] = {
-                    "results": [{
-                        "source_call_id": last_call.get("tool_call_id", tool_id),
-                        "content": str(content),
-                    }]
-                }
-            else:
-                steps.append(_step("tool", str(content)))
+                for block in content:
+                    if block.get("type") == "tool_result":
+                        tool_id = block.get("tool_use_id", "")
+                        result_content = block.get("content", "")
+                        if isinstance(result_content, list):
+                            result_content = "\n".join(
+                                b.get("text", str(b)) for b in result_content
+                            )
+                        tc = pending_tools.pop(tool_id, None)
+                        if tc:
+                            steps.append(_step(
+                                "agent",
+                                f"Tool: {tc['function_name']}",
+                                tool_calls=[tc],
+                                observation={"results": [{
+                                    "source_call_id": tool_id,
+                                    "content": str(result_content),
+                                }]},
+                            ))
 
         elif msg_type == "result":
-            cost_usd = msg.get("cost_usd", msg.get("total_cost_usd"))
+            cost_usd = msg.get("total_cost_usd")
             if msg.get("session_id"):
                 session_id = msg["session_id"]
+            num_turns = msg.get("num_turns", num_turns)
             result_usage = msg.get("usage", {})
             if result_usage:
-                total_input_tokens = result_usage.get("input_tokens", total_input_tokens)
-                total_output_tokens = result_usage.get("output_tokens", total_output_tokens)
-                total_cache_tokens = result_usage.get("cache_read_input_tokens", total_cache_tokens)
-            num_turns = msg.get("num_turns", num_turns)
+                total_input_tokens = result_usage.get("input_tokens", 0)
+                total_output_tokens = result_usage.get("output_tokens", 0)
+                total_cache_tokens = result_usage.get("cache_read_input_tokens", 0)
+
+    # Flush any pending tool calls that never got a result
+    for tc in pending_tools.values():
+        steps.append(_step(
+            "agent",
+            f"Tool: {tc['function_name']}",
+            tool_calls=[tc],
+        ))
 
     if not steps:
         steps.append(_step("user", "(empty)"))

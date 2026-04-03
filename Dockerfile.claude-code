@@ -1,0 +1,25 @@
+FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends ca-certificates git curl && \
+    rm -rf /var/lib/apt/lists/*
+
+# Install Node.js (required for Claude Code CLI)
+RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \
+    apt-get install -y --no-install-recommends nodejs && \
+    rm -rf /var/lib/apt/lists/*
+
+# Install Claude Code CLI globally
+RUN npm install -g @anthropic-ai/claude-code
+
+WORKDIR /app
+
+# Python deps
+COPY pyproject.toml ./
+RUN uv pip install --system .
+
+# Agent code
+COPY agent-claude-code.py ./
+
+RUN ln -sf $(which python3) /usr/local/bin/python
+RUN mkdir -p /logs /app/output

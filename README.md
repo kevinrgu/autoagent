@@ -1,3 +1,12 @@
+<p align="center">
+  <a href="https://www.thirdlayer.inc">
+    <img src="https://www.thirdlayer.inc/thirdlayer-logo.svg" alt="thirdlayer" width="200">
+  </a>
+</p>
+<p align="center">
+  <a href="https://www.thirdlayer.inc">thirdlayer.inc</a>
+</p>
+
 # autoagent
 
 > Like [autoresearch](https://github.com/karpathy/autoresearch) but for agent engineering. Give an AI agent a task, let it build and iterate on an agent harness autonomously overnight. It modifies the system prompt, tools, agent configuration, and orchestration, runs the benchmark, checks the score, keeps or discards the change, and repeats.
@@ -146,14 +155,3 @@ You can equip the agent with [Agent Skills for Context Engineering](https://gith
 
 MIT
 
----
-
-<p align="center">maintained by</p>
-<p align="center">
-  <a href="https://www.thirdlayer.inc">
-    <img src="https://www.thirdlayer.inc/thirdlayer-logo.svg" alt="thirdlayer" width="200">
-  </a>
-</p>
-<p align="center">
-  <a href="https://www.thirdlayer.inc">thirdlayer.inc</a>
-</p>

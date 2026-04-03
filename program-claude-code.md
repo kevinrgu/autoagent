@@ -27,18 +27,26 @@ commands internally. The harness controls:
 - **CLI flags**: permission mode, max turns, allowed tools
 - **Prompt framing**: how the task instruction is presented to the CLI
 
+## Prerequisites
+
+- Claude Code CLI installed on the host: `npm install -g @anthropic-ai/claude-code`
+- Authenticated: `claude login` (or already logged in — no API key needed)
+- The adapter automatically copies your `~/.claude` auth credentials into the
+  container at runtime.
+
 ## Setup
 
 Before starting a new experiment:
 
 1. Read `README.md`, this file, and `agent-claude-code.py`.
-2. If the current branch contains tasks, read a representative sample of task
+2. Verify `claude --version` works on your host machine.
+3. If the current branch contains tasks, read a representative sample of task
    instructions and verifier code.
-3. Build the base image and verify the agent imports cleanly:
+4. Build the base image and verify the agent imports cleanly:
    ```bash
    docker build -f Dockerfile.claude-code -t autoagent-base .
    ```
-4. Initialize `results.tsv` if it does not exist.
+5. Initialize `results.tsv` if it does not exist.
 
 The first run must always be the unmodified baseline.
 
@@ -75,8 +83,11 @@ comments. Do not modify that fixed section unless the human explicitly asks.
 
 ```bash
 docker build -f Dockerfile.claude-code -t autoagent-base .
-rm -rf jobs; mkdir -p jobs && uv run harbor run -p tasks/ -n 100 --agent-import-path agent-claude-code:AutoAgent -o jobs --job-name latest > run.log 2>&1
+rm -rf jobs && mkdir -p jobs && uv run harbor run -p tasks/ -n 100 --agent-import-path agent-claude-code:AutoAgent -o jobs --job-name latest > run.log 2>&1
 ```
+
+No `.env` file or API key needed — the adapter copies your local Claude auth
+into the container automatically.
 
 ## Goal, Logging, Experiment Loop, Keep/Discard Rules
 

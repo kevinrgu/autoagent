@@ -10,6 +10,8 @@ RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \
     rm -rf /var/lib/apt/lists/*
 
 # Install Claude Code CLI globally
+# No API key needed — auth is provided by mounting the host's ~/.claude
+# directory (handled by the Harbor adapter at runtime).
 RUN npm install -g @anthropic-ai/claude-code
 
 WORKDIR /app
@@ -20,6 +22,9 @@ RUN uv pip install --system .
 
 # Agent code
 COPY agent-claude-code.py ./
+
+# Prepare auth mount point — the adapter uploads credentials at runtime
+RUN mkdir -p /root/.claude
 
 RUN ln -sf $(which python3) /usr/local/bin/python
 RUN mkdir -p /logs /app/output

@@ -1,20 +1,21 @@
 """
 Claude Code CLI adapter for Harbor.
 
-Spawns `claude` as a subprocess inside the container. The meta-agent iterates
-on the editable section (system prompt, CLI flags, context strategy).
+Spawns the locally-installed `claude` CLI as a subprocess. No API key needed —
+Claude Code uses its own OAuth session from the host machine.
+
+Prerequisites:
+  - Claude Code CLI installed: npm install -g @anthropic-ai/claude-code
+  - Authenticated locally: claude login (or already logged in)
 
 Run all tasks:
   docker build -f Dockerfile.claude-code -t autoagent-base .
-  set -a && source .env && set +a
   uv run harbor run -p tasks/ --agent-import-path agent-claude-code:AutoAgent -o jobs --job-name latest > run.log 2>&1
 """
 
 from __future__ import annotations
 
-import asyncio
 import json
-import os
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -76,7 +77,6 @@ def build_cli_args(instruction_path: str) -> list[str]:
 # HARBOR ADAPTER — fixed harness, do not modify
 # ===========================================================================
 
-from dotenv import dotenv_values  # noqa: E402
 from harbor.agents.base import BaseAgent  # noqa: E402
 from harbor.environments.base import BaseEnvironment  # noqa: E402
 from harbor.models.agent.context import AgentContext  # noqa: E402
@@ -248,8 +248,19 @@ class AutoAgent(BaseAgent):
             source_path=instr_file, target_path="/task/instruction.md"
         )
 
-        env = {"IS_SANDBOX": "1", **dotenv_values()}
-        env = {k: v for k, v in env.items() if v}
+        # Upload host's Claude auth config into the container so the CLI
+        # can authenticate without an API key.
+        host_claude_dir = Path.home() / ".claude"
+        if host_claude_dir.exists():
+            for auth_file in ("credentials.json", "config.json", ".credentials.json"):
+                src = host_claude_dir / auth_file
+                if src.exists():
+                    await environment.upload_file(
+                        source_path=src,
+                        target_path=f"/root/.claude/{auth_file}",
+                    )
+
+        env = {"IS_SANDBOX": "1"}
         env.update(self._extra_env)
 
         result = await environment.exec(

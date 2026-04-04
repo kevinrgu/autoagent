@@ -17,10 +17,10 @@ from harbor.agents.base import BaseAgent
 from harbor.environments.base import BaseEnvironment
 from harbor.models.agent.context import AgentContext
 
-# Import editable harness entry-points (run_task, MODEL) from agent.py.
-# agent.py imports *this* module at the bottom, so by the time Python resolves
-# this import agent.py's module-level symbols are already defined — no cycle.
-from agent import MODEL, run_task  # noqa: E402
+def _load_harness():
+    """Lazy import to avoid circular dependency with agent.py."""
+    from agent import MODEL, run_task
+    return MODEL, run_task
 
 
 def to_atif(result: object, model: str, duration_ms: int = 0) -> dict:
@@ -41,7 +41,7 @@ def to_atif(result: object, model: str, duration_ms: int = 0) -> dict:
         step.update({key: value for key, value in extra.items() if value is not None})
         return step
 
-    pending_tool_call = None
+    pending_tool_calls: dict[str, object] = {}
     for item in result.new_items:
         if isinstance(item, MessageOutputItem):
             text = ItemHelpers.text_message_output(item)
@@ -63,39 +63,44 @@ def to_atif(result: object, model: str, duration_ms: int = 0) -> dict:
                 )
         elif isinstance(item, ToolCallItem):
             raw = item.raw_item
-            if hasattr(raw, "name"):
-                pending_tool_call = raw
-        elif isinstance(item, ToolCallOutputItem) and pending_tool_call:
-            arguments = (
-                json.loads(pending_tool_call.arguments)
-                if isinstance(pending_tool_call.arguments, str)
-                else pending_tool_call.arguments
+            if hasattr(raw, "call_id") and hasattr(raw, "name"):
+                pending_tool_calls[raw.call_id] = raw
+        elif isinstance(item, ToolCallOutputItem):
+            output_call_id = (
+                getattr(item.raw_item, "call_id", None)
+                or getattr(item.raw_item, "tool_call_id", None)
             )
-            output_str = str(item.output) if item.output else ""
-            steps.append(
-                _step(
-                    "agent",
-                    f"Tool: {pending_tool_call.name}",
-                    tool_calls=[
-                        {
-                            "tool_call_id": pending_tool_call.call_id,
-                            "function_name": pending_tool_call.name,
-                            "arguments": arguments,
-                        }
-                    ],
-                    observation={
-                        "results": [
-                            {
-                                "source_call_id": pending_tool_call.call_id,
-                                "content": output_str,
-                            }
-                        ]
-                    },
+            pending_tool_call = pending_tool_calls.pop(output_call_id, None) if output_call_id else None
+            if pending_tool_call:
+                arguments = (
+                    json.loads(pending_tool_call.arguments)
+                    if isinstance(pending_tool_call.arguments, str)
+                    else pending_tool_call.arguments
                 )
-            )
-            pending_tool_call = None
+                output_str = str(item.output) if item.output else ""
+                steps.append(
+                    _step(
+                        "agent",
+                        f"Tool: {pending_tool_call.name}",
+                        tool_calls=[
+                            {
+                                "tool_call_id": pending_tool_call.call_id,
+                                "function_name": pending_tool_call.name,
+                                "arguments": arguments,
+                            }
+                        ],
+                        observation={
+                            "results": [
+                                {
+                                    "source_call_id": pending_tool_call.call_id,
+                                    "content": output_str,
+                                }
+                            ]
+                        },
+                    )
+                )
 
-    if pending_tool_call:
+    for pending_tool_call in pending_tool_calls.values():
         arguments = (
             json.loads(pending_tool_call.arguments)
             if isinstance(pending_tool_call.arguments, str)
@@ -165,9 +170,10 @@ class AutoAgent(BaseAgent):
         instr_file.write_text(instruction)
         await environment.upload_file(source_path=instr_file, target_path="/task/instruction.md")
 
-        result, duration_ms = await run_task(environment, instruction)
+        model, run_task_fn = _load_harness()
+        result, duration_ms = await run_task_fn(environment, instruction)
 
-        atif = to_atif(result, model=MODEL, duration_ms=duration_ms)
+        atif = to_atif(result, model=model, duration_ms=duration_ms)
         traj_path = self.logs_dir / "trajectory.json"
         traj_path.write_text(json.dumps(atif, indent=2))
 

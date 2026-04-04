@@ -28,14 +28,18 @@ def check_diff(diff_text: str) -> PreflightResult:
         PreflightResult with rejected=True and a reason if any rule is violated.
     """
     for line in diff_text.splitlines():
-        # Check if any fixed file is being modified (appears in diff --git header)
+        # Check if any fixed file is being modified (exact root-relative path)
         if line.startswith("diff --git"):
-            for fixed_file in FIXED_FILES:
-                if f"/{fixed_file}" in line or f" {fixed_file}" in line:
-                    return PreflightResult(
-                        rejected=True,
-                        reason=f"modification of fixed file detected: {fixed_file}",
-                    )
+            parts = line.split()
+            if len(parts) >= 4:
+                left = parts[2].removeprefix("a/")
+                right = parts[3].removeprefix("b/")
+                for path in (left, right):
+                    if path in FIXED_FILES:
+                        return PreflightResult(
+                            rejected=True,
+                            reason=f"modification of fixed file detected: {path}",
+                        )
 
         # Check forbidden patterns only in added lines
         if line.startswith("+") and not line.startswith("+++"):

@@ -27,8 +27,8 @@ class AgentWorkflow(Protocol):
         """Build and return a configured agent instance."""
         ...
 
-    async def run_task(self, environment: Any, instruction: str) -> dict:
-        """Execute a task and return a result mapping."""
+    async def run_task(self, environment: Any, instruction: str) -> tuple[Any, int]:
+        """Execute a task and return (result, duration_ms)."""
         ...
 
 

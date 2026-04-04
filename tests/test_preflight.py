@@ -48,6 +48,19 @@ diff --git a/agent.py b/agent.py
     assert result.rejected is False
 
 
+def test_allow_nested_init_py():
+    """tests/__init__.py should NOT be rejected (only root __init__.py is fixed)."""
+    diff = """\
+diff --git a/tests/__init__.py b/tests/__init__.py
+--- a/tests/__init__.py
++++ b/tests/__init__.py
+@@ -0,0 +1 @@
++# test package
+"""
+    result = check_diff(diff)
+    assert result.rejected is False
+
+
 def test_reject_sys_modules():
     diff = """\
 diff --git a/agent.py b/agent.py

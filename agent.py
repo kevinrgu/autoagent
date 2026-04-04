@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import time
 from datetime import datetime, timezone
 
@@ -37,7 +38,21 @@ MAX_TURNS = 30
 
 
 def selected_backend() -> str:
-    return os.environ.get("AUTOAGENT_BACKEND", "openai-agents").strip().lower()
+    backend = os.environ.get("AUTOAGENT_BACKEND", "auto").strip().lower()
+    if backend != "auto":
+        return backend
+
+    if os.environ.get("OPENAI_API_KEY"):
+        return "openai-agents"
+
+    try:
+        CodexOAuthManager().load_auth_state()
+    except CodexOAuthError:
+        return "openai-agents"
+
+    if shutil.which("codex"):
+        return "codex-cli"
+    return "openai-agents"
 
 
 def build_model() -> str | OpenAIResponsesModel:

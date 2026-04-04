@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 from unittest.mock import AsyncMock
 
 import pytest
@@ -29,11 +28,11 @@ async def test_run_task_uses_codex_backend_when_selected(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_run_task_uses_openai_runner_by_default(monkeypatch):
+async def test_run_task_uses_openai_runner_when_selected_backend_is_openai(monkeypatch):
     env = DummyEnvironment()
     fake_result = object()
     runner_result = type("RunnerResult", (), {"run": AsyncMock(return_value=fake_result)})
-    monkeypatch.delenv("AUTOAGENT_BACKEND", raising=False)
+    monkeypatch.setenv("AUTOAGENT_BACKEND", "openai-agents")
     monkeypatch.setattr(agent, "create_agent", lambda environment: "fake-agent")
     monkeypatch.setattr(agent, "Runner", runner_result)
 
@@ -42,6 +41,27 @@ async def test_run_task_uses_openai_runner_by_default(monkeypatch):
     assert result is fake_result
     assert duration_ms >= 0
     runner_result.run.assert_awaited_once_with("fake-agent", input="do something", max_turns=agent.MAX_TURNS)
+
+
+def test_selected_backend_auto_prefers_openai_when_api_key_present(monkeypatch):
+    monkeypatch.delenv("AUTOAGENT_BACKEND", raising=False)
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+
+    assert agent.selected_backend() == "openai-agents"
+
+
+def test_selected_backend_auto_prefers_codex_when_codex_auth_exists(monkeypatch):
+    monkeypatch.delenv("AUTOAGENT_BACKEND", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+
+    class FakeOAuth:
+        def load_auth_state(self):
+            return object()
+
+    monkeypatch.setattr(agent, "CodexOAuthManager", lambda: FakeOAuth())
+    monkeypatch.setattr(agent.shutil, "which", lambda name: "/usr/local/bin/codex")
+
+    assert agent.selected_backend() == "codex-cli"
 
 
 def test_to_atif_supports_codex_cli_result():

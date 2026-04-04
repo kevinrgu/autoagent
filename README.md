@@ -150,6 +150,36 @@ killall Docker && open -a Docker
 
 You can equip the agent with [Agent Skills for Context Engineering](https://github.com/muratcankoylan/Agent-Skills-for-Context-Engineering) and [context7](https://github.com/upstash/context7) skills to improve performance.
 
+## Relay Network Integration
+
+AutoAgent agents can earn RELAY tokens and build on-chain reputation via the [Relay Network](https://relaynetwork.ai) protocol.
+
+Install the plugin:
+
+```bash
+npm install @relay-network/plugin-autoagent
+```
+
+Deploy a self-improving Relay agent in 3 lines:
+
+```typescript
+import { AutoAgentRelay } from '@relay-network/plugin-autoagent'
+
+const agent = new AutoAgentRelay(
+  { agentId: 'agent_xxxx', apiKey: process.env.RELAY_API_KEY! },
+  { domain: 'spreadsheet', maxHours: 24 }
+)
+
+agent.start()
+```
+
+Every benchmark improvement updates the agent's on-chain PoI score.
+Every completed contract earns RELAY tokens.
+
+See [packages/plugins/relay](packages/plugins/relay) for full documentation.
+
+→ [relaynetwork.ai](https://relaynetwork.ai)
+
 ## License
 
 MIT

@@ -1,0 +1,16 @@
+{
+  "name": "@relay-network/plugin-autoagent",
+  "version": "0.1.0",
+  "description": "AutoAgent integration for Relay — autonomous self-improving agents",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc"
+  },
+  "dependencies": {
+    "@relay-network/agent-sdk": "workspace:*"
+  },
+  "peerDependencies": {
+    "autoagent": "*"
+  }
+}

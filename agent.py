@@ -14,11 +14,15 @@ from agents.items import (
     ToolCallItem,
     ToolCallOutputItem,
 )
+from agents.models.openai_responses import OpenAIResponsesModel
 from agents.tool import FunctionTool
 from agents.usage import Usage
 from harbor.agents.base import BaseAgent
 from harbor.environments.base import BaseEnvironment
 from harbor.models.agent.context import AgentContext
+from openai import AsyncOpenAI
+
+from oauth_openai import CodexOAuthError, CodexOAuthManager
 
 
 # ============================================================================
@@ -28,6 +32,19 @@ from harbor.models.agent.context import AgentContext
 SYSTEM_PROMPT = "You are an agent that executes tasks"
 MODEL = "gpt-5"
 MAX_TURNS = 30
+
+
+def build_model() -> str | OpenAIResponsesModel:
+    """Prefer Codex/OpenAI OAuth when available, otherwise fall back to default SDK auth."""
+    try:
+        oauth = CodexOAuthManager()
+        client = AsyncOpenAI(
+            api_key=oauth.get_access_token,
+            default_headers=oauth.get_default_headers(),
+        )
+        return OpenAIResponsesModel(MODEL, openai_client=client)
+    except CodexOAuthError:
+        return MODEL
 
 
 def create_tools(environment: BaseEnvironment) -> list[FunctionTool]:
@@ -57,7 +74,7 @@ def create_agent(environment: BaseEnvironment) -> Agent:
         name="autoagent",
         instructions=SYSTEM_PROMPT,
         tools=tools,
-        model=MODEL,
+        model=build_model(),
     )
 
 

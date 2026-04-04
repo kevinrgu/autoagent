@@ -48,11 +48,15 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 # 2. Install dependencies
 uv sync
 
-# 3. Set up the environment variables required by your current agent/runtime
-# Example:
+# 3. Authentication
+# Option A: traditional API key
 cat > .env << 'EOF'
-OPENAI_API_KEY=...
+OPENAI_API_KEY=***
 EOF
+
+# Option B: Codex/OpenAI OAuth login (no API key)
+# Requires `codex login` to populate ~/.codex/auth.json
+codex login
 
 # 4. Build base image
 docker build -f Dockerfile.base -t autoagent-base .
@@ -65,6 +69,8 @@ rm -rf jobs; mkdir -p jobs && uv run harbor run -p tasks/ --task-name "<task-nam
 # 7. Run all tasks in parallel (-n = concurrency, default 4)
 rm -rf jobs; mkdir -p jobs && uv run harbor run -p tasks/ -n 100 --agent-import-path agent:AutoAgent -o jobs --job-name latest > run.log 2>&1
 ```
+
+Note: Codex/ChatGPT OAuth tokens only work if the resulting bearer token has the required OpenAI API scopes (for example `api.responses.write`). If your OAuth login lacks those scopes, the harness will authenticate successfully but OpenAI API calls will still be rejected.
 
 ## Running the meta-agent
 

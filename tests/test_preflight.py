@@ -61,6 +61,30 @@ diff --git a/tests/__init__.py b/tests/__init__.py
     assert result.rejected is False
 
 
+def test_reject_from_importlib():
+    diff = """\
+diff --git a/agent.py b/agent.py
+--- a/agent.py
++++ b/agent.py
+@@ -1,3 +1,4 @@
++from importlib import import_module
+"""
+    result = check_diff(diff)
+    assert result.rejected is True
+
+
+def test_reject_dunder_import():
+    diff = """\
+diff --git a/agent.py b/agent.py
+--- a/agent.py
++++ b/agent.py
+@@ -1,3 +1,4 @@
++mod = __import__("os")
+"""
+    result = check_diff(diff)
+    assert result.rejected is True
+
+
 def test_reject_sys_modules():
     diff = """\
 diff --git a/agent.py b/agent.py

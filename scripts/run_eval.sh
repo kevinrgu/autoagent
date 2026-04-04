@@ -4,6 +4,9 @@ NETWORK="${EVAL_NETWORK:-none}"
 docker run --rm --read-only \
   --network="$NETWORK" \
   --tmpfs /tmp:size=512M \
+  --tmpfs /task:size=512M \
+  --tmpfs /logs:size=128M \
+  --tmpfs /app/output:size=128M \
   --mount type=bind,source="$(pwd)/adapter.py",target=/app/fixed/adapter.py,readonly \
   --mount type=bind,source="$(pwd)/contracts.py",target=/app/fixed/contracts.py,readonly \
   -v "$(pwd)/agent.py:/app/editable/agent.py:rw" \

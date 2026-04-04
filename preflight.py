@@ -6,9 +6,10 @@ from dataclasses import dataclass
 FIXED_FILES = {"adapter.py", "contracts.py", "__init__.py"}
 
 FORBIDDEN_PATTERNS = [
-    r'\bimport\s+importlib\b',
-    r'\bimport\s+ctypes\b',
+    r'\b(?:from|import)\s+importlib\b',
+    r'\b(?:from|import)\s+ctypes\b',
     r'\bsys\.modules\b',
+    r'\b__import__\s*\(',
 ]
 
 

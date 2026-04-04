@@ -1,0 +1,4 @@
+[task]
+name = "hello-world"
+description = "Write hello world to output file"
+timeout_sec = 60

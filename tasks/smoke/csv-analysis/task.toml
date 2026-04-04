@@ -1,0 +1,4 @@
+[task]
+name = "csv-analysis"
+description = "Create a CSV file and compute the average score"
+timeout_sec = 60

@@ -5,13 +5,10 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
-
-# Python deps — only what the agent needs (harbor excluded via .dockerignore)
+COPY contracts.py adapter.py /app/fixed/
+COPY agent.py /app/editable/
 COPY pyproject.toml ./
 RUN uv pip install --system .
-
-# Agent code
-COPY agent.py ./
-
+ENV PYTHONPATH=/app/fixed:/app/editable:/app
 RUN ln -sf $(which python3) /usr/local/bin/python
 RUN mkdir -p /logs /app/output

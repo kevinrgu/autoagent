@@ -1,0 +1,4 @@
+[task]
+name = "fibonacci"
+description = "Calculate the 10th Fibonacci number and write it to output"
+timeout_sec = 60

@@ -1,0 +1,4 @@
+[task]
+name = "text-processing"
+description = "Count words in a given text and write the count to output"
+timeout_sec = 60

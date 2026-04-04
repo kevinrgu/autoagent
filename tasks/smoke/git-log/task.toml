@@ -1,0 +1,4 @@
+[task]
+name = "git-log"
+description = "Initialize a git repo, create 3 commits, and write git log to output"
+timeout_sec = 120

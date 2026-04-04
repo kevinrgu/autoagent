@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import time
 from datetime import datetime, timezone
 
@@ -22,6 +23,7 @@ from harbor.environments.base import BaseEnvironment
 from harbor.models.agent.context import AgentContext
 from openai import AsyncOpenAI
 
+from codex_cli_backend import CodexCliResult, run_task_with_codex_cli
 from oauth_openai import CodexOAuthError, CodexOAuthManager
 
 
@@ -32,6 +34,10 @@ from oauth_openai import CodexOAuthError, CodexOAuthManager
 SYSTEM_PROMPT = "You are an agent that executes tasks"
 MODEL = "gpt-5"
 MAX_TURNS = 30
+
+
+def selected_backend() -> str:
+    return os.environ.get("AUTOAGENT_BACKEND", "openai-agents").strip().lower()
 
 
 def build_model() -> str | OpenAIResponsesModel:
@@ -83,6 +89,11 @@ async def run_task(
     instruction: str,
 ) -> tuple[object, int]:
     """Run the agent on a task and return (result, duration_ms)."""
+    backend = selected_backend()
+    if backend == "codex-cli":
+        remote_workdir = os.environ.get("AUTOAGENT_CODEX_WORKDIR", "/task")
+        return await run_task_with_codex_cli(environment, instruction, remote_workdir=remote_workdir)
+
     agent = create_agent(environment)
     t0 = time.time()
     result = await Runner.run(agent, input=instruction, max_turns=MAX_TURNS)
@@ -112,6 +123,37 @@ def to_atif(result: object, model: str, duration_ms: int = 0) -> dict:
         }
         step.update({key: value for key, value in extra.items() if value is not None})
         return step
+
+    if isinstance(result, CodexCliResult):
+        for raw_step in result.steps:
+            steps.append(
+                _step(
+                    raw_step.get("source", "agent"),
+                    raw_step.get("message", "(empty)"),
+                    model_name=model,
+                )
+            )
+        if not steps:
+            steps.append(_step("agent", result.final_output or "(empty)", model_name=model))
+        return {
+            "schema_version": "ATIF-v1.6",
+            "session_id": result.last_response_id or "codex-cli",
+            "agent": {"name": "autoagent", "version": "0.1.0", "model_name": model},
+            "steps": steps,
+            "final_metrics": {
+                "total_prompt_tokens": 0,
+                "total_completion_tokens": 0,
+                "total_cached_tokens": 0,
+                "total_cost_usd": None,
+                "total_steps": len(steps),
+                "extra": {
+                    "duration_ms": duration_ms,
+                    "num_turns": len(result.raw_responses),
+                    "backend": result.backend,
+                    "reported_total_tokens": result.reported_total_tokens,
+                },
+            },
+        }
 
     pending_tool_call = None
     for item in result.new_items:

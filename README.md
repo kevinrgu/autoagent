@@ -72,6 +72,14 @@ rm -rf jobs; mkdir -p jobs && uv run harbor run -p tasks/ -n 100 --agent-import-
 
 Note: Codex/ChatGPT OAuth tokens only work if the resulting bearer token has the required OpenAI API scopes (for example `api.responses.write`). If your OAuth login lacks those scopes, the harness will authenticate successfully but OpenAI API calls will still be rejected.
 
+Optional: use the Codex CLI backend instead of the OpenAI Agents SDK:
+
+```bash
+AUTOAGENT_BACKEND=codex-cli uv run harbor run -p tasks/ --task-name "<task-name>" -l 1 -n 1 --agent-import-path agent:AutoAgent -o jobs --job-name latest
+```
+
+This backend mirrors the remote task workspace locally, lets `codex exec` edit it, then syncs the workspace back into the task environment. It is best suited for file-editing tasks and is less faithful than the default shell-tool-based OpenAI Agents backend.
+
 ## Running the meta-agent
 
 Point your coding agent at the repo and prompt:

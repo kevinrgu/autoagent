@@ -66,6 +66,60 @@ rm -rf jobs; mkdir -p jobs && uv run harbor run -p tasks/ --task-name "<task-nam
 rm -rf jobs; mkdir -p jobs && uv run harbor run -p tasks/ -n 100 --agent-import-path agent:AutoAgent -o jobs --job-name latest > run.log 2>&1
 ```
 
+## Multi-LLM Support
+
+The harness supports multiple LLM providers via [LiteLLM](https://github.com/BerriAI/litellm). Configure via environment variables:
+
+### Environment Variables
+
+- `LLM_PROVIDER`: Provider name (`openai`, `anthropic`, `ollama`, `azure`, etc.)
+- `MODEL`: Model name (e.g., `gpt-5`, `claude-3-5-sonnet`, `qwen3.5:35b-a3b-q8_0`)
+- `LLM_BASE_URL`: Optional base URL (required for Ollama, Azure, etc.)
+- `API_KEY`: Provider-specific API key (e.g., `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`)
+
+### Using Local Ollama
+
+```bash
+cat > .env << 'EOF'
+LLM_PROVIDER=ollama
+MODEL=qwen3.5:35b-a3b-q8_0
+LLM_BASE_URL=http://host.docker.internal:11434/v1
+EOF
+```
+
+### Using OpenAI
+
+```bash
+cat > .env << 'EOF'
+LLM_PROVIDER=openai
+MODEL=gpt-5
+OPENAI_API_KEY=your-api-key
+EOF
+```
+
+### Using Anthropic
+
+```bash
+cat > .env << 'EOF'
+LLM_PROVIDER=anthropic
+MODEL=claude-3-5-sonnet
+ANTHROPIC_API_KEY=your-api-key
+EOF
+```
+
+### Using Azure
+
+```bash
+cat > .env << 'EOF'
+LLM_PROVIDER=azure
+MODEL=your-deployment-name
+AZURE_API_KEY=your-api-key
+AZURE_API_BASE=https://your-resource.openai.azure.com
+EOF
+```
+
+The model selection is optional and can be changed dynamically by modifying the environment variables before running the benchmark.
+
 ## Running the meta-agent
 
 Point your coding agent at the repo and prompt:

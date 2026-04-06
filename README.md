@@ -49,9 +49,14 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 uv sync
 
 # 3. Set up the environment variables required by your current agent/runtime
-# Example:
+# Example (OpenAI):
 cat > .env << 'EOF'
 OPENAI_API_KEY=...
+EOF
+
+# Example (MiniMax — set MODEL = "MiniMax-M2.7" in agent.py):
+cat > .env << 'EOF'
+MINIMAX_API_KEY=...
 EOF
 
 # 4. Build base image

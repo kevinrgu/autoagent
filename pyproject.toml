@@ -10,3 +10,8 @@ dependencies = [
     "numpy",
     "harbor",
 ]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+]

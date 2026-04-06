@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import json
+import os
 import time
 from datetime import datetime, timezone
 
-from agents import Agent, Runner, function_tool
+from agents import Agent, Runner, function_tool, set_default_openai_client
 from agents.items import (
     ItemHelpers,
     MessageOutputItem,
@@ -19,6 +20,7 @@ from agents.usage import Usage
 from harbor.agents.base import BaseAgent
 from harbor.environments.base import BaseEnvironment
 from harbor.models.agent.context import AgentContext
+from openai import AsyncOpenAI
 
 
 # ============================================================================
@@ -28,6 +30,28 @@ from harbor.models.agent.context import AgentContext
 SYSTEM_PROMPT = "You are an agent that executes tasks"
 MODEL = "gpt-5"
 MAX_TURNS = 30
+
+
+def _configure_provider() -> None:
+    """Configure the LLM client based on MODEL.
+
+    Supports MiniMax via the OpenAI-compatible API. Set MINIMAX_API_KEY and
+    optionally MINIMAX_BASE_URL to use MiniMax models (e.g. ``MiniMax-M2.7``).
+    """
+    if MODEL.lower().startswith("minimax"):
+        api_key = os.environ.get("MINIMAX_API_KEY")
+        if not api_key:
+            raise ValueError(
+                "MINIMAX_API_KEY environment variable is required for MiniMax models"
+            )
+        client = AsyncOpenAI(
+            api_key=api_key,
+            base_url=os.environ.get("MINIMAX_BASE_URL", "https://api.minimax.io/v1"),
+        )
+        set_default_openai_client(client)
+
+
+_configure_provider()
 
 
 def create_tools(environment: BaseEnvironment) -> list[FunctionTool]:

@@ -107,11 +107,11 @@ def run_cycle(cycle_num: int, program: dict, decisions_path: str) -> bool:
         f"Apply this change to the code below.\n\n"
         f"Proposed change:\n{proposal}\n\n"
         f"Current code ({target_path}):\n```\n{target_code[:5000]}\n```\n\n"
-        "Output ONLY the modified code. No explanation."
+        "Output ONLY the modified function or section. Start with the def line. Do not output the entire file. No explanation, no markdown fences."
     )
     try:
         new_code = call_llm(EXECUTOR_URL, EXECUTOR_MODEL,
-            "You are a code executor. Apply the proposed change exactly.", execute_prompt)
+            "You are a code executor. Output ONLY the modified function or section, not the entire file. Start with the def/class line. Do not truncate. If the change is a new function, output just that function.", execute_prompt)
     except Exception as e:
         print(f"[Executor] FAIL: {e}")
         log_decision(decisions_path, cycle_num, proposal[:300], f"EXECUTOR_FAIL: {e}", False)
@@ -146,7 +146,29 @@ def run_cycle(cycle_num: int, program: dict, decisions_path: str) -> bool:
 
     if accepted and target_path:
         # Write the new code to the target file
-        Path(target_path).write_text(new_code, encoding="utf-8")
+        # Smart apply: if new_code looks like a partial function, patch it in
+_target = Path(target_path)
+_orig = _target.read_text(encoding="utf-8")
+if len(new_code) < len(_orig) * 0.8:
+    # Partial output -- find the function name and replace just that function
+    import re as _re
+    _fn_match = _re.match(r"(async )?def (\w+)", new_code.strip())
+    if _fn_match:
+        _fn_name = _fn_match.group(2)
+        _pattern = _re.compile(rf"(async )?def {_fn_name}\b.*?(?=\n(async )?def |\Z)", _re.DOTALL)
+        if _pattern.search(_orig):
+            _patched = _pattern.sub(new_code.rstrip(), _orig)
+            _target.write_text(_patched, encoding="utf-8")
+            print(f"[Executor] Patched function {_fn_name} in {target_path}")
+        else:
+            _target.write_text(_orig + "\n\n" + new_code, encoding="utf-8")
+            print(f"[Executor] Appended new function {_fn_name}")
+    else:
+        _target.write_text(new_code, encoding="utf-8")
+        print(f"[Executor] Full replace (no function match)")
+else:
+    _target.write_text(new_code, encoding="utf-8")
+    print(f"[Executor] Full replace ({len(new_code)} chars)")
         print(f"[Written] {target_path} updated ({len(new_code)} chars)")
 
     return accepted

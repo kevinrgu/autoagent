@@ -24,8 +24,8 @@ import httpx
 PROPOSER_URL   = "http://192.168.2.50:11434/v1/chat/completions"
 PROPOSER_MODEL = "bifrost-t2-gemma4"   # gemma4:26b on Forge â€” proposes improvements
 
-EXECUTOR_URL   = "http://192.168.2.4:11434/v1/chat/completions"
-EXECUTOR_MODEL = "bifrost-1a-hearth"   # qwen2.5-coder:7b on Hearth â€” implements changes
+EXECUTOR_URL   = "http://192.168.2.33:11434/v1/chat/completions"
+EXECUTOR_MODEL = "bifrost-t1b"   # qwen2.5-coder:7b on Hearth â€” implements changes
 
 EVALUATOR_URL  = "http://192.168.2.50:11434/v1/chat/completions"
 EVALUATOR_MODEL = "bifrost-t2-gemma4"  # gemma4:26b on Forge â€” reviews (same model, different system prompt)
@@ -102,7 +102,7 @@ def run_cycle(cycle_num: int, program: dict, decisions_path: str) -> bool:
     print(f"[Proposer] Proposal: {proposal[:200]}...")
 
     # --- EXECUTE ---
-    print(f"[Executor] {EXECUTOR_MODEL} @ Hearth ...")
+    print(f"[Executor] {EXECUTOR_MODEL} @ Bifrost ...")
     execute_prompt = (
         f"Apply this change to the code below.\n\n"
         f"Proposed change:\n{proposal}\n\n"
@@ -188,6 +188,9 @@ def parse_program(program_path: str) -> dict:
 
 
 def main():
+    import sys
+    if sys.stdout.encoding != 'utf-8':
+        sys.stdout.reconfigure(encoding='utf-8', errors='replace')
     parser = argparse.ArgumentParser(description="BIFROST Session O â€” 3-agent cycle")
     parser.add_argument("--program", default="program.md", help="Path to program.md")
     parser.add_argument("--decisions", default="decisions.md", help="Path to decisions.md")
@@ -196,7 +199,7 @@ def main():
 
     print("BIFROST Session O â€” Local 3-Agent Cycle")
     print(f"  Proposer:  {PROPOSER_MODEL} @ Forge")
-    print(f"  Executor:  {EXECUTOR_MODEL} @ Hearth")
+    print(f"  Executor:  {EXECUTOR_MODEL} @ Bifrost")
     print(f"  Evaluator: {EVALUATOR_MODEL} @ Forge")
     print(f"  Program:   {args.program}")
     print(f"  Decisions: {args.decisions}")
@@ -228,4 +231,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 

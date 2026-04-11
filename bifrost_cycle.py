@@ -26,11 +26,11 @@ import httpx
 PROPOSER_URL    = "http://192.168.2.33:11434/v1/chat/completions"
 PROPOSER_MODEL  = "mistral-small3.1:24b"   # Mistral/EU on Bifrost
 
-EXECUTOR_URL    = "http://192.168.2.33:11434/v1/chat/completions"
-EXECUTOR_MODEL  = "bifrost-t1b"            # Google/US gemma3:12b on Bifrost
+EXECUTOR_URL    = "http://192.168.2.50:11434/v1/chat/completions"
+EXECUTOR_MODEL  = "bifrost-t2-gemma4"      # Google/US gemma4:26b on Forge -- upgraded from 12b
 
 EVALUATOR_URL   = "http://192.168.2.50:11434/v1/chat/completions"
-EVALUATOR_MODEL = "bifrost-t2-gemma4"      # Google/US gemma4:26b on Forge
+EVALUATOR_MODEL = "bifrost-t2-gemma4"      # Google/US gemma4:26b on Forge -- same model, different prompt
 
 TIMEOUT = 300
 

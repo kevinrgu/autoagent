@@ -1,11 +1,11 @@
-"""
-BIFROST Session O — Local 3-agent improvement cycle.
+﻿"""
+BIFROST Session O â€” Local 3-agent improvement cycle.
 
 Proposer (llama4:scout on Forge) suggests one improvement.
 Executor (qwen2.5-coder:7b on Hearth) implements it.
 Evaluator (gemma4:26b on Forge) reviews and accepts/rejects.
 
-No external SDKs — uses httpx to call Ollama /v1/chat/completions directly.
+No external SDKs â€” uses httpx to call Ollama /v1/chat/completions directly.
 """
 
 import argparse
@@ -22,15 +22,15 @@ import httpx
 # ============================================================================
 
 PROPOSER_URL   = "http://192.168.2.50:11434/v1/chat/completions"
-PROPOSER_MODEL = "bifrost-t2-gemma4"   # gemma4:26b on Forge — proposes improvements
+PROPOSER_MODEL = "bifrost-t2-gemma4"   # gemma4:26b on Forge â€” proposes improvements
 
 EXECUTOR_URL   = "http://192.168.2.4:11434/v1/chat/completions"
-EXECUTOR_MODEL = "bifrost-1a-hearth"   # qwen2.5-coder:7b on Hearth — implements changes
+EXECUTOR_MODEL = "bifrost-1a-hearth"   # qwen2.5-coder:7b on Hearth â€” implements changes
 
 EVALUATOR_URL  = "http://192.168.2.50:11434/v1/chat/completions"
-EVALUATOR_MODEL = "bifrost-t2-gemma4"  # gemma4:26b on Forge — reviews (same model, different system prompt)
+EVALUATOR_MODEL = "bifrost-t2-gemma4"  # gemma4:26b on Forge â€” reviews (same model, different system prompt)
 
-TIMEOUT = 120  # seconds per LLM call
+TIMEOUT = 240  # seconds per LLM call
 
 
 def call_llm(url: str, model: str, system: str, user: str) -> str:
@@ -84,7 +84,7 @@ def run_cycle(cycle_num: int, program: dict, decisions_path: str) -> bool:
     print(f"[Proposer] {PROPOSER_MODEL} @ Forge ...")
     propose_prompt = (
         f"Objective: {objective}\n\n"
-        f"Current code ({target_path}):\n```\n{target_code[:3000]}\n```\n\n"
+        f"Current code ({target_path}):\n```\n{target_code[:5000]}\n```\n\n"
         "Suggest ONE specific, bounded improvement. Be precise about what to change "
         "and why. Do not suggest rewrites. Output format:\n"
         "CHANGE: <what to change>\n"
@@ -106,7 +106,7 @@ def run_cycle(cycle_num: int, program: dict, decisions_path: str) -> bool:
     execute_prompt = (
         f"Apply this change to the code below.\n\n"
         f"Proposed change:\n{proposal}\n\n"
-        f"Current code ({target_path}):\n```\n{target_code[:3000]}\n```\n\n"
+        f"Current code ({target_path}):\n```\n{target_code[:5000]}\n```\n\n"
         "Output ONLY the modified code. No explanation."
     )
     try:
@@ -123,7 +123,7 @@ def run_cycle(cycle_num: int, program: dict, decisions_path: str) -> bool:
     print(f"[Evaluator] {EVALUATOR_MODEL} @ Forge ...")
     evaluate_prompt = (
         f"Objective: {objective}\n\n"
-        f"Original code:\n```\n{target_code[:2000]}\n```\n\n"
+        f"Original code:\n```\n{target_code[:5000]}\n```\n\n"
         f"Proposed change:\n{proposal[:500]}\n\n"
         f"New code:\n```\n{new_code[:2000]}\n```\n\n"
         "Does the new code improve on the original? Is it correct?\n"
@@ -188,13 +188,13 @@ def parse_program(program_path: str) -> dict:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="BIFROST Session O — 3-agent cycle")
+    parser = argparse.ArgumentParser(description="BIFROST Session O â€” 3-agent cycle")
     parser.add_argument("--program", default="program.md", help="Path to program.md")
     parser.add_argument("--decisions", default="decisions.md", help="Path to decisions.md")
     parser.add_argument("--max-cycles", type=int, default=5, help="Max cycles per run")
     args = parser.parse_args()
 
-    print("BIFROST Session O — Local 3-Agent Cycle")
+    print("BIFROST Session O â€” Local 3-Agent Cycle")
     print(f"  Proposer:  {PROPOSER_MODEL} @ Forge")
     print(f"  Executor:  {EXECUTOR_MODEL} @ Hearth")
     print(f"  Evaluator: {EVALUATOR_MODEL} @ Forge")
@@ -228,3 +228,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

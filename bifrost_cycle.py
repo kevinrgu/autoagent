@@ -1,10 +1,10 @@
 """
 BIFROST Session O -- Local 3-agent self-improvement cycle.
 
-Two-node assignment (avoids Forge model swap contention):
-  Proposer:  gemma4:26b (Google/US) on Forge -- proposes improvements
-  Executor:  gemma3:12b (Google/US) on Bifrost -- implements changes
-  Evaluator: gemma4:26b (Google/US) on Forge -- reviews (same model, different system prompt)
+Cross-origin assignment:
+  Proposer:  mistral-small3.1:24b (Mistral/EU) on Bifrost -- crisp proposals
+  Executor:  gemma3:12b (Google/US) on Bifrost -- fast coding
+  Evaluator: gemma4:26b (Google/US) on Forge -- deep judgment (different scale)
 
 No external SDKs -- uses httpx to call Ollama /v1/chat/completions directly.
 No max_tokens -- let models respond at full length.
@@ -23,14 +23,14 @@ import httpx
 # ENDPOINT CONFIG — three distinct model families
 # ============================================================================
 
-PROPOSER_URL    = "http://192.168.2.50:11434/v1/chat/completions"
-PROPOSER_MODEL  = "bifrost-t2-gemma4"      # Google/US gemma4:26b — shares Forge with Evaluator (no model swap)
+PROPOSER_URL    = "http://192.168.2.33:11434/v1/chat/completions"
+PROPOSER_MODEL  = "mistral-small3.1:24b"   # Mistral/EU on Bifrost -- crisp proposals
 
 EXECUTOR_URL    = "http://192.168.2.33:11434/v1/chat/completions"
-EXECUTOR_MODEL  = "bifrost-t1b"            # Google/US gemma3:12b — fast coding
+EXECUTOR_MODEL  = "bifrost-t1b"            # Google/US gemma3:12b on Bifrost -- fast coding
 
 EVALUATOR_URL   = "http://192.168.2.50:11434/v1/chat/completions"
-EVALUATOR_MODEL = "bifrost-t2-gemma4"      # Google/US gemma4:26b — deep judgment
+EVALUATOR_MODEL = "bifrost-t2-gemma4"      # Google/US gemma4:26b on Forge -- deep judgment
 
 TIMEOUT = 300  # seconds per LLM call -- no max_tokens, let model finish
 
@@ -39,16 +39,37 @@ TIMEOUT = 300  # seconds per LLM call -- no max_tokens, let model finish
 # LLM CALL
 # ============================================================================
 
-def call_llm(client: httpx.Client, url: str, model: str, system: str, user: str) -> str:
-    payload = {
-        "model": model,
-        "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
-        "stream": False,
-        "temperature": 0.7,
+import time
+import random
+
+def call_llm(url, model, system_prompt, user_prompt, timeout=60):
+    """
+    Call the language model API with the given prompts.
+
+    :param url: The API endpoint URL.
+    :param model: The model to use.
+    :param system_prompt: The system prompt.
+    :param user_prompt: The user prompt.
+    :param timeout: The timeout value for the HTTP request in seconds.
+    :return: The response from the language model API.
+    """
+    headers = {
+        "Content-Type": "application/json",
     }
-    r = client.post(url, json=payload, timeout=TIMEOUT)
-    r.raise_for_status()
-    return r.json()["choices"][0]["message"]["content"]
+    data = {
+        "model": model,
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ],
+    }
+
+    try:
+        response = requests.post(url, headers=headers, json=data, timeout=timeout)
+        response.raise_for_status()
+        return response.json()["choices"][0]["message"]["content"]
+    except requests.RequestException as e:
+        raise RuntimeError(f"HTTP request failed: {e}")
 def read_file(path: str) -> str:
     """Read a file, return empty string if missing."""
     p = Path(path)
@@ -160,7 +181,7 @@ def parse_program(path: str) -> dict:
 
 def propose(objective: str, target_path: str, target_code: str) -> str | None:
     """Get a proposal from the Proposer. Retries once with simpler prompt if empty."""
-    print(f"\n  [Proposer] {PROPOSER_MODEL} @ Forge ...")
+    print(f"\n  [Proposer] {PROPOSER_MODEL} @ Bifrost ...")
     t0 = time.time()
 
     # First attempt
@@ -312,7 +333,7 @@ def main():
     args = parser.parse_args()
 
     print("BIFROST Session O -- Local 3-Agent Cycle")
-    print(f"  Proposer:  {PROPOSER_MODEL} @ Forge :11434")
+    print(f"  Proposer:  {PROPOSER_MODEL} @ Bifrost :11434")
     print(f"  Executor:  {EXECUTOR_MODEL} @ Bifrost :11434")
     print(f"  Evaluator: {EVALUATOR_MODEL} @ Forge :11434")
 

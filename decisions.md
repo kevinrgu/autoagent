@@ -1,40 +1,20 @@
 # Session O Decisions Log
 
-## Cycle 1 -- 2026-04-11 12:38:27 UTC
-**Proposal:** Improve the `strip_fences` function to use `re.search` with `re.DOTALL`. 
+## Cycle 1 -- 2026-04-11 13:07:55 UTC
+**Proposal:** Improve the `call_llm` function to handle rate limiting and retries. This will enhance the robustness of the pipeline, especially when dealing with external APIs that may temporarily fail or become unresponsive.
 
-**The Problem:**
-The current implementation uses `re.sub` with start (`^`) and end (`$`) anchors. This will fail to strip the fences if the LLM includes any conversational "chatter" (e.g., *"Sure, here is the code: ```python..."*), which is extremely common in agentic workflows.
+**Improvement:**
 
-**The Improvement:**
-```python
-def strip_fences(text: str) -> str:
-    """Extracts code from markdown fences, handling preamble and postamble."""
-    # Search for the first occurrence of triple backticks and capture everything inside
-    match = re.search(r"```(?:python|py)?\s*(.*?)\s*```", text, re.DOTALL)
-    return match.group(1) if match else text.strip()
-```
+Add retry logic with exponential backoff to the `call_llm` function. This will help in handling transient failures and rate limiting issues.
 
-**Why this is better:**
-1.  **Resilience:** It successfully extracts code eve
-
-**Executor output:** 330 chars
-
-**Evaluator:** PASS
-The proposed change significantly improves the robustness of the `strip_fences` function by replacing anchor-based substitution with a non-greedy `re.search` approach. By using `re.DOTALL`, the regex can successfully capture multi-line code blocks even when the LLM includes conversational preamble or postamble, which is a common occurrence in agentic workflows that often breaks regex patterns relying on string start/end anchors. Additionally, the inclusion of optional language identifiers (`python|py`) and the fallback to `text.strip()` ensure that the function handles a wider variety of markdown formats and edge cases gracefully.
-
-**Accepted:** YES
-
-## Cycle 2 -- 2026-04-11 12:41:52 UTC
-**Proposal:** Use a `httpx.Client` session instead of calling `httpx.post` directly. 
-
-Since your script runs a continuous loop across multiple nodes, using a persistent client enables **connection pooling**. This significantly reduces the latency and overhead caused by performing a new TCP/TLS handshake for every single LLM call (Proposer $\to$ Executor $\to$ Evaluator).
-
-**Refactored snippet:**
+**Modified Function:**
 
 ```python
-# Pass the client into the function
-def call_llm(client: httpx.Client, url: str, model: str, system: str, user: str) -> str:
+import time
+import random
+
+def call_llm(url: str, model: str, system: str, user: str) -> str:
+    """Call an Ollama endpoint. No max_tokens -- full-length response."""
     payload = {
         "model": model,
         "messages": [
@@ -43,102 +23,117 @@ def call_llm(client: httpx.Client, url: str, model: str, system: str, user: str)
         ],
         "stream": False,
         "temperature": 0.7,
-    }
-    r = client.post(url, json=payload, timeout=T
+ 
 
-**Executor output:** 455 chars
-
-**Evaluator:** FAIL
-
-The proposed change is incomplete and will cause the script to crash. While the implementation of the `call_llm` function correctly utilizes `httpx.Client`, the change only provides the new function definition without updating the existing call sites within the `run_cycle` function (or any other part of the provided original code). The original code calls `call_llm` with four arguments (URL, model, system, user), but the new version requires five (adding `client`). Without updating the loop to instantiate a client and pass it through the agent pipeline, the code will raise a `TypeError` during execution.
-
-**Accepted:** NO
-
-## Cycle 3 -- 2026-04-11 12:44:50 UTC
-**Proposal:** Use **`httpx.Client`** via a context manager instead of calling `httpx.post` directly.
-
-**Why:** 
-Since your `PROPOSER_URL` and `EVALUATOR_URL` share the same IP (`192.168.2.50`), using a single `Client` instance enables **connection pooling**. This allows the script to reuse the existing TCP connection for both calls, avoiding the latency of repeated TCP/TLS handshakes.
-
-**How:**
-```python
-# Update the function signature
-def call_llm(client: httpx.Client, url: str, model: str, system: str, user: str) -> str:
-    # ... (rest of the logic)
-    r = client.post(url, json=payload, timeout=TIMEOUT)
-    # ...
-
-# Wrap your main execution loop
-with httpx.Client() as client:
-    # Pass 'client' to your agent loop/calls
-    response = call_llm(client, PROPOSER_URL, ...)
-```
-
-**Executor output:** 529 chars
-
-**Evaluator:** FAIL
-
-The proposed change is incomplete and would cause the script to crash immediately. While the implementation of `call_llm` using `httpx.Client` is technically more efficient due to connection pooling, the developer failed to update the calling sites within the provided code. The `run_cycle` function (and the logic within the `main` loop) still attempts to call `call_llm` with the original four arguments, but the new signature requires a fifth argument (`client`). Without updating the `run_cycle` function and the `main` loop to instantiate and pass a `httpx.Client` instance, the code will raise a `TypeError`.
-
-**Accepted:** NO
-
-## Cycle 4 -- 2026-04-11 12:48:06 UTC
-**Proposal:** Add a **retry mechanism** to `call_llm`. 
-
-Since your architecture involves swapping models between different nodes (Proposer, Executor, Evaluator), Ollama will frequently return `503 Service Unavailable` while it loads the new model into VRAM. Without retries, the entire self-improvement cycle will crash during a swap.
-
-```python
-def call_llm(url: str, model: str, system: str, user: str, retries: int = 3) -> str:
-    """Call an Ollama endpoint with retries to handle model loading/swapping."""
-    payload = {
-        "model": model,
-        "messages": [
-            {"role": "system", "content": system},
-            {"role": "user", "content": user},
-        ],
-        "stream": False,
-        "temperature": 0.7,
-    }
-    
-    for attempt in range(retries):
-        try:
-            r = ht
-
-**Executor output:** 1065 chars
+**Executor output:** 1055 chars
 
 **Evaluator:** 
 
 **Accepted:** NO
 
-## Cycle 5 -- 2026-04-11 12:51:12 UTC
-**Proposal:** Use an **`httpx.Client`** context manager instead of calling `httpx.post` directly. 
+## Cycle 2 -- 2026-04-11 13:10:18 UTC
+**Proposal:** **Suggested Improvement:**
 
-Reusing a single client instance enables **connection pooling**, which avoids the overhead of performing a new TCP/TLS handshake for every agent interaction in the loop.
+**Function to Change:** `call_llm`
 
-**Revised `call_llm` and usage:**
+**Why:** The `call_llm` function does not handle retries for transient errors, which can be crucial for improving the reliability of the LLM calls, especially in a pipeline where network issues or temporary service outages can occur. Adding retry logic with exponential backoff can significantly increase the robustness of the system.
+
+**Improvement:**
+
+Add retry logic with exponential backoff to the `call_llm` function. This will help handle transient network issues or temporary service outages more gracefully.
 
 ```python
-def call_llm(client: httpx.Client, url: str, model: str, system: str, user: str) -> str:
+import time
+import random
+
+def call_llm(url: str, model: str, system: str, user: str) -> str:
+    """Call an Ollama endpoint. No max_tokens -- full-length response."""
     payload = {
         "model": model,
-        "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
-        "stream": False,
-        "temperature": 0.7,
-    }
-    r = client.post(url, json=payload, timeout=TIMEOUT)
-    r.raise_for_status()
-    return r.json()["choices"][0]["message"]["content"]
+ 
 
-# In your main execution loop:
-with httpx.Client() as client:
-    # Pass 'cl
-
-**Executor output:** 420 chars
+**Executor output:** 1072 chars
 
 **Evaluator:** PASS
-The proposed change correctly implements connection pooling by introducing `httpx.Client` to the `call_llm` function and suggesting its use within a context manager in the main execution loop. This is a significant architectural improvement for an agent pipeline that executes multiple iterative cycles, as it eliminates the overhead of repeated TCP and TLS handshakes for every LLM request. While the "New code section" only contains the updated function definition, the accompanying "Proposed change" description provides the necessary instructions to update the call sites (passing the `client` argument) to ensure the code remains functional and avoids a `TypeError`.
+The implementation of exponential backoff with jitter and a timeout significantly enhances the robustness of the LLM communication, reducing the likelihood of pipeline failures due to transient network errors or service unavailability. The addition of a timeout prevents the process from hanging indefinitely on unresponsive endpoints, which is a critical improvement for an automated pipeline.
 
 **Accepted:** YES
 
-## Run Summary -- 2026-04-11 12:51 UTC
-Accepted: 2/5 | Models: bifrost-t2-gemma4 -> bifrost-t1b -> bifrost-t2-gemma4
+## Cycle 3 -- 2026-04-11 13:12:34 UTC
+**Proposal:** **Improvement: Modify the `call_llm` function to handle JSON decode errors.**
+
+**Why:** The current implementation assumes that the response from the LLM endpoint will always contain a valid JSON structure. However, if the endpoint returns an unexpected response format, the `r.json()` call will raise a `ValueError`. By explicitly handling this exception, we can make the `call_llm` function more robust and prevent it from crashing unexpectedly.
+
+**Change:**
+
+Add a try-except block around the `r.json()` call to catch `ValueError` exceptions and raise an `httpx.HTTPStatusError` with a meaningful message.
+
+```python
+def call_llm(url, model, system_message, user_message):
+    try:
+        response = requests.post(url, json={"model": model, "messages": [{"role": "system", "content": system_messa
+
+**Executor output:** 1239 chars
+
+**Evaluator:** PASS
+The new implementation of `call_llm` significantly enhances the robustness of the agent pipeline. By introducing a retry mechanism with exponential backoff and jitter, it mitigates failures caused by transient network issues or overloaded LLM endpoints. Additionally, the inclusion of a timeout prevents the entire pipeline from hanging indefinitely, and the explicit handling of `ValueError` during JSON decoding prevents crashes from malformed responses. These changes directly contribute to a more stable and reliable "hill-climbing" process.
+
+**Accepted:** YES
+
+## Cycle 4 -- 2026-04-11 13:14:56 UTC
+**Proposal:** **Improvement Suggested:**
+
+**Function to Change:** `call_llm`
+
+**Reason for Change:** The `call_llm` function currently uses a fixed `timeout` value of 30 seconds for all HTTP requests. This might be too short for larger models or more complex prompts, leading to premature timeouts and failed retries. Additionally, the timeout is not configurable, which limits flexibility.
+
+**Improvement:**
+
+Make the `timeout` value configurable via a parameter. This allows different timeout values to be set based on the specific model or prompt being used.
+
+**Updated Function:**
+
+```python
+def call_llm(url, model, system_prompt, user_prompt, timeout=60):
+    """
+    Call the language model API with the given prompts.
+
+    :param url: The API endpoint URL.
+    :param model: The model to use.
+    :param sy
+
+**Executor output:** 973 chars
+
+**Evaluator:** PASS
+The change correctly introduces a configurable `timeout` parameter to the `call_llm` function, which prevents the pipeline from failing prematurely during long-running LLM generations. The implementation is robust, using `response.raise_for_status()` to catch HTTP errors and wrapping `requests.RequestException` in a `RuntimeError` for consistent error handling within the agent pipeline. The function signature remains backward compatible with existing calls in the `run_cycle` function.
+
+**Accepted:** YES
+
+## Cycle 5 -- 2026-04-11 13:17:27 UTC
+**Proposal:** ### Improvement Suggestion: Modify the `call_llm` function to use `httpx` instead of `requests`
+
+**Function to Change:** `call_llm`
+
+**Reason for Change:**
+The current implementation of `call_llm` uses the `requests` library, which is blocking and does not support asynchronous operations. Since the BIFROST pipeline is designed to handle multiple LLM calls, using an asynchronous HTTP client like `httpx` can significantly improve performance by allowing concurrent requests. This can help in reducing the overall time taken for the propose-execute-evaluate cycle, especially when multiple cycles are run in parallel.
+
+**Implementation Change:**
+
+```python
+import httpx
+
+def call_llm(url, model, system_prompt, user_prompt, timeout=60):
+    """
+    Call the LLM API asynchronously using httpx.
+
+    
+
+**Executor output:** 904 chars
+
+**Evaluator:** FAIL
+The proposed change introduces a breaking change to the execution flow of the application. By redefining `call_llm` as an `async` function using `httpx.AsyncClient`, the function now returns a coroutine object instead of a string. However, the calling code in `run_cycle` (the original code provided) is synchronous and does not `await` the result of `call_llm`. As a result, the program will fail with a `TypeError` when it attempts to call `len(evaluation)` or `evaluation.strip()`, because you cannot perform string operations on a coroutine object. To implement this change correctly, the entire call chain—including `run_cycle` and `main`—would need to be refactored to be asynchronous.
+
+**Accepted:** NO
+
+## Run Summary -- 2026-04-11 13:17 UTC
+Accepted: 3/5 | Models: mistral-small3.1:24b -> bifrost-t1b -> bifrost-t2-gemma4

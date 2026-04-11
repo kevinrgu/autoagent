@@ -1,10 +1,10 @@
 """
 BIFROST Session O -- Local 3-agent self-improvement cycle.
 
-Two-node assignment (avoids Forge model swap contention):
-  Proposer:  gemma4:26b (Google/US) on Forge -- proposes improvements
-  Executor:  gemma3:12b (Google/US) on Bifrost -- implements changes
-  Evaluator: gemma4:26b (Google/US) on Forge -- reviews (same model, different system prompt)
+Cross-origin assignment:
+  Proposer:  mistral-small3.1:24b (Mistral/EU) on Bifrost -- crisp proposals
+  Executor:  gemma3:12b (Google/US) on Bifrost -- fast coding
+  Evaluator: gemma4:26b (Google/US) on Forge -- deep judgment (different scale)
 
 No external SDKs -- uses httpx to call Ollama /v1/chat/completions directly.
 No max_tokens -- let models respond at full length.
@@ -23,14 +23,14 @@ import httpx
 # ENDPOINT CONFIG — three distinct model families
 # ============================================================================
 
-PROPOSER_URL    = "http://192.168.2.50:11434/v1/chat/completions"
-PROPOSER_MODEL  = "bifrost-t2-gemma4"      # Google/US gemma4:26b — shares Forge with Evaluator (no model swap)
+PROPOSER_URL    = "http://192.168.2.33:11434/v1/chat/completions"
+PROPOSER_MODEL  = "mistral-small3.1:24b"   # Mistral/EU on Bifrost -- crisp proposals
 
 EXECUTOR_URL    = "http://192.168.2.33:11434/v1/chat/completions"
-EXECUTOR_MODEL  = "bifrost-t1b"            # Google/US gemma3:12b — fast coding
+EXECUTOR_MODEL  = "bifrost-t1b"            # Google/US gemma3:12b on Bifrost -- fast coding
 
 EVALUATOR_URL   = "http://192.168.2.50:11434/v1/chat/completions"
-EVALUATOR_MODEL = "bifrost-t2-gemma4"      # Google/US gemma4:26b — deep judgment
+EVALUATOR_MODEL = "bifrost-t2-gemma4"      # Google/US gemma4:26b on Forge -- deep judgment
 
 TIMEOUT = 300  # seconds per LLM call -- no max_tokens, let model finish
 
@@ -55,10 +55,6 @@ def call_llm(url: str, model: str, system: str, user: str) -> str:
     return r.json()["choices"][0]["message"]["content"]
 
 
-# ============================================================================
-# HELPERS
-# ============================================================================
-
 def read_file(path: str) -> str:
     """Read a file, return empty string if missing."""
     p = Path(path)
@@ -66,13 +62,10 @@ def read_file(path: str) -> str:
 
 
 def strip_fences(text: str) -> str:
-    """Remove markdown code fences from LLM output."""
-    text = text.strip()
-    text = re.sub(r"^```(?:python|py)?\s*\n?", "", text)
-    text = re.sub(r"\n?```\s*$", "", text)
-    return text.strip()
-
-
+    """Extracts code from markdown fences, handling preamble and postamble."""
+    # Search for the first occurrence of triple backticks and capture everything inside
+    match = re.search(r"```(?:python|py)?\s*(.*?)\s*```", text, re.DOTALL)
+    return match.group(1) if match else text.strip()
 def smart_apply(target_path: str, original: str, new_code: str) -> str:
     """Apply new_code to target file. Partial patch if function detected,
     otherwise full replace. Returns description of what was done."""
@@ -173,7 +166,7 @@ def parse_program(path: str) -> dict:
 
 def propose(objective: str, target_path: str, target_code: str) -> str | None:
     """Get a proposal from the Proposer. Retries once with simpler prompt if empty."""
-    print(f"\n  [Proposer] {PROPOSER_MODEL} @ Forge ...")
+    print(f"\n  [Proposer] {PROPOSER_MODEL} @ Bifrost ...")
     t0 = time.time()
 
     # First attempt
@@ -325,7 +318,7 @@ def main():
     args = parser.parse_args()
 
     print("BIFROST Session O -- Local 3-Agent Cycle")
-    print(f"  Proposer:  {PROPOSER_MODEL} @ Forge :11434")
+    print(f"  Proposer:  {PROPOSER_MODEL} @ Bifrost :11434")
     print(f"  Executor:  {EXECUTOR_MODEL} @ Bifrost :11434")
     print(f"  Evaluator: {EVALUATOR_MODEL} @ Forge :11434")
 

@@ -1,15 +1,17 @@
-﻿"""
-BIFROST Session O â€” Local 3-agent improvement cycle.
+"""
+BIFROST Session O -- Local 3-agent self-improvement cycle.
 
-Proposer (llama4:scout on Forge) suggests one improvement.
-Executor (qwen2.5-coder:7b on Hearth) implements it.
+Proposer (gemma4:26b on Forge) reads the target file and suggests ONE improvement.
+Executor (gemma3:12b on Bifrost) implements the change.
 Evaluator (gemma4:26b on Forge) reviews and accepts/rejects.
 
-No external SDKs â€” uses httpx to call Ollama /v1/chat/completions directly.
+No external SDKs -- uses httpx to call Ollama /v1/chat/completions directly.
+No max_tokens -- let models respond at full length.
 """
 
 import argparse
 import json
+import re
 import sys
 import time
 from datetime import datetime, timezone
@@ -18,23 +20,27 @@ from pathlib import Path
 import httpx
 
 # ============================================================================
-# BIFROST LOCAL ENDPOINT CONFIG
+# ENDPOINT CONFIG
 # ============================================================================
 
-PROPOSER_URL   = "http://192.168.2.50:11434/v1/chat/completions"
-PROPOSER_MODEL = "bifrost-t2-gemma4"   # gemma4:26b on Forge â€” proposes improvements
+PROPOSER_URL    = "http://192.168.2.50:11434/v1/chat/completions"
+PROPOSER_MODEL  = "bifrost-t2-gemma4"    # gemma4:26b on Forge
 
-EXECUTOR_URL   = "http://192.168.2.33:11434/v1/chat/completions"
-EXECUTOR_MODEL = "bifrost-t1b"   # qwen2.5-coder:7b on Hearth â€” implements changes
+EXECUTOR_URL    = "http://192.168.2.33:11434/v1/chat/completions"
+EXECUTOR_MODEL  = "bifrost-t1b"          # gemma3:12b on Bifrost
 
-EVALUATOR_URL  = "http://192.168.2.50:11434/v1/chat/completions"
-EVALUATOR_MODEL = "bifrost-t2-gemma4"  # gemma4:26b on Forge â€” reviews (same model, different system prompt)
+EVALUATOR_URL   = "http://192.168.2.50:11434/v1/chat/completions"
+EVALUATOR_MODEL = "bifrost-t2-gemma4"    # gemma4:26b on Forge
 
-TIMEOUT = 240  # seconds per LLM call
+TIMEOUT = 300  # seconds per LLM call -- no max_tokens, let model finish
 
+
+# ============================================================================
+# LLM CALL
+# ============================================================================
 
 def call_llm(url: str, model: str, system: str, user: str) -> str:
-    """Call an Ollama endpoint and return the assistant response."""
+    """Call an Ollama endpoint. No max_tokens -- full-length response."""
     payload = {
         "model": model,
         "messages": [
@@ -43,213 +49,259 @@ def call_llm(url: str, model: str, system: str, user: str) -> str:
         ],
         "stream": False,
         "temperature": 0.7,
-        "max_tokens": 2048,
     }
     r = httpx.post(url, json=payload, timeout=TIMEOUT)
     r.raise_for_status()
     return r.json()["choices"][0]["message"]["content"]
 
 
-def read_target(target_path: str) -> str:
-    """Read the target file, return contents or empty string."""
-    p = Path(target_path)
-    if p.exists():
-        return p.read_text(encoding="utf-8", errors="replace")
-    return ""
+# ============================================================================
+# HELPERS
+# ============================================================================
+
+def read_file(path: str) -> str:
+    """Read a file, return empty string if missing."""
+    p = Path(path)
+    return p.read_text(encoding="utf-8", errors="replace") if p.exists() else ""
 
 
-def log_decision(decisions_path: str, cycle: int, proposal: str, result: str, accepted: bool):
-    """Append a structured entry to decisions.md."""
+def strip_fences(text: str) -> str:
+    """Remove markdown code fences from LLM output."""
+    text = text.strip()
+    # Remove opening fence: ```python or ```
+    text = re.sub(r"^```(?:python|py)?\s*\n?", "", text)
+    # Remove closing fence
+    text = re.sub(r"\n?```\s*$", "", text)
+    return text.strip()
+
+
+def smart_apply(target_path: str, original: str, new_code: str) -> str:
+    """Apply new_code to target file. If new_code is a partial function,
+    patch just that function. Otherwise full replace. Returns description."""
+    new_code = strip_fences(new_code)
+
+    if not new_code or len(new_code) < 20:
+        return "SKIPPED: executor output too short"
+
+    # Try to find the function name in the new code
+    fn_match = re.search(r"(async\s+)?def\s+(\w+)", new_code.strip())
+    if fn_match:
+        fn_name = fn_match.group(2)
+        # Find and replace the function in the original
+        pattern = re.compile(
+            rf"(async\s+)?def\s+{re.escape(fn_name)}\b.*?(?=\n(?:async\s+)?def\s|\nclass\s|$)",
+            re.DOTALL,
+        )
+        if pattern.search(original):
+            patched = pattern.sub(lambda _: new_code.rstrip(), original)
+            Path(target_path).write_text(patched, encoding="utf-8")
+            return f"patched function {fn_name}"
+        else:
+            # Function not found in original -- append it
+            Path(target_path).write_text(original.rstrip() + "\n\n\n" + new_code, encoding="utf-8")
+            return f"appended new function {fn_name}"
+
+    # No function match -- full replace
+    Path(target_path).write_text(new_code, encoding="utf-8")
+    return f"full replace (no function pattern, {len(new_code)} chars)"
+def log_decision(path: str, cycle: int, proposal: str, executor_len: int,
+                 evaluation: str, accepted: bool):
+    """Append a cycle entry to decisions.md."""
     ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
     entry = (
         f"\n## Cycle {cycle} -- {ts}\n"
-        f"**Proposal:** {proposal[:500]}\n\n"
-        f"**Result:** {result[:500]}\n\n"
+        f"**Proposal:** {proposal}\n\n"
+        f"**Executor output:** {executor_len} chars\n\n"
+        f"**Evaluator:** {evaluation}\n\n"
         f"**Accepted:** {'YES' if accepted else 'NO'}\n"
     )
-    Path(decisions_path).open("a", encoding="utf-8").write(entry)
+    Path(path).open("a", encoding="utf-8").write(entry)
 
 
-def run_cycle(cycle_num: int, program: dict, decisions_path: str) -> bool:
-    """Run one propose-execute-evaluate cycle. Returns True if accepted."""
-    target_path = program.get("target", "")
-    target_code = read_target(target_path)
-    objective = program.get("objective", "Improve the code.")
+def parse_program(path: str) -> dict:
+    """Parse program.md for objective and target."""
+    text = read_file(path)
+    result = {"objective": "", "target": ""}
 
-    print(f"\n{'='*60}")
-    print(f"CYCLE {cycle_num}")
-    print(f"{'='*60}")
-
-    # --- PROPOSE ---
-    print(f"[Proposer] {PROPOSER_MODEL} @ Forge ...")
-    propose_prompt = (
-        f"Objective: {objective}\n\n"
-        f"Current code ({target_path}):\n```\n{target_code[:5000]}\n```\n\n"
-        "Suggest ONE specific, bounded improvement. Be precise about what to change "
-        "and why. Do not suggest rewrites. Output format:\n"
-        "CHANGE: <what to change>\n"
-        "REASON: <why this improves the code>\n"
-        "DIFF: <before/after snippet>"
-    )
-    try:
-        proposal = call_llm(PROPOSER_URL, PROPOSER_MODEL,
-            "You are a code improvement proposer. Suggest one bounded change.", propose_prompt)
-    except Exception as e:
-        print(f"[Proposer] FAIL: {e}")
-        log_decision(decisions_path, cycle_num, f"PROPOSER_FAIL: {e}", "", False)
-        return False
-
-    print(f"[Proposer] Proposal: {proposal[:200]}...")
-
-    # --- EXECUTE ---
-    print(f"[Executor] {EXECUTOR_MODEL} @ Bifrost ...")
-    execute_prompt = (
-        f"Apply this change to the code below.\n\n"
-        f"Proposed change:\n{proposal}\n\n"
-        f"Current code ({target_path}):\n```\n{target_code[:5000]}\n```\n\n"
-        "Output ONLY the modified function or section. Start with the def line. Do not output the entire file. No explanation, no markdown fences."
-    )
-    try:
-        new_code = call_llm(EXECUTOR_URL, EXECUTOR_MODEL,
-            "You are a code executor. Output ONLY the modified function or section, not the entire file. Start with the def/class line. Do not truncate. If the change is a new function, output just that function.", execute_prompt)
-    except Exception as e:
-        print(f"[Executor] FAIL: {e}")
-        log_decision(decisions_path, cycle_num, proposal[:300], f"EXECUTOR_FAIL: {e}", False)
-        return False
-
-    print(f"[Executor] Generated {len(new_code)} chars")
-
-    # --- EVALUATE ---
-    print(f"[Evaluator] {EVALUATOR_MODEL} @ Forge ...")
-    evaluate_prompt = (
-        f"Objective: {objective}\n\n"
-        f"Original code:\n```\n{target_code[:5000]}\n```\n\n"
-        f"Proposed change:\n{proposal[:500]}\n\n"
-        f"New code:\n```\n{new_code[:2000]}\n```\n\n"
-        "Does the new code improve on the original? Is it correct?\n"
-        "Reply with EXACTLY one of:\n"
-        "ACCEPT: <reason>\n"
-        "REJECT: <reason>"
-    )
-    try:
-        evaluation = call_llm(EVALUATOR_URL, EVALUATOR_MODEL,
-            "You are a cross-family code reviewer. Accept only measurable improvements.", evaluate_prompt)
-    except Exception as e:
-        print(f"[Evaluator] FAIL: {e}")
-        log_decision(decisions_path, cycle_num, proposal[:300], f"EVALUATOR_FAIL: {e}", False)
-        return False
-
-    accepted = evaluation.strip().upper().startswith("ACCEPT")
-    print(f"[Evaluator] {'ACCEPTED' if accepted else 'REJECTED'}: {evaluation[:200]}")
-
-    log_decision(decisions_path, cycle_num, proposal[:500], evaluation[:500], accepted)
-
-    if accepted and target_path:
-        # Smart apply: patch function if partial, else full replace
-        import re as _re
-        _target = Path(target_path)
-        _orig = _target.read_text(encoding="utf-8")
-        if len(new_code) < len(_orig) * 0.8:
-            _fn_match = _re.match(r"(async )?def (\w+)", new_code.strip())
-            if _fn_match:
-                _fn_name = _fn_match.group(2)
-                _pattern = _re.compile(rf"(async )?def {_fn_name}\b.*?(?=\n(async )?def |\Z)", _re.DOTALL)
-                if _pattern.search(_orig):
-                    _patched = _pattern.sub(new_code.rstrip(), _orig)
-                    _target.write_text(_patched, encoding="utf-8")
-                    print(f"[Executor] Patched function {_fn_name}")
-                else:
-                    _target.write_text(_orig + "\n\n" + new_code, encoding="utf-8")
-                    print(f"[Executor] Appended new function {_fn_name}")
-            else:
-                _target.write_text(new_code, encoding="utf-8")
-                print(f"[Executor] Full replace (no function match)")
-        else:
-            _target.write_text(new_code, encoding="utf-8")
-            print(f"[Executor] Full replace ({len(new_code)} chars)")
-        print(f"[Written] {target_path} updated ({len(new_code)} chars)")
-
-    return accepted
-
-
-def parse_program(program_path: str) -> dict:
-    """Parse program.md into a dict with objective, target, constraints."""
-    p = Path(program_path)
-    if not p.exists():
-        return {"objective": "Improve the code.", "target": ""}
-
-    text = p.read_text(encoding="utf-8", errors="replace")
-    result = {"objective": "", "target": "", "raw": text}
-
+    in_section = None
     for line in text.split("\n"):
-        line_stripped = line.strip()
-        if line_stripped.startswith("## Objective"):
+        stripped = line.strip()
+        if stripped.startswith("## Objective"):
+            in_section = "objective"
             continue
-        if line_stripped.startswith("## Target"):
+        elif stripped.startswith("## Target"):
+            in_section = "target"
             continue
-        if "Objective" in line and not result["objective"]:
-            # Next non-empty line after ## Objective is the objective text
-            pass
-        if line_stripped and not line_stripped.startswith("#") and not line_stripped.startswith("-"):
-            if not result["objective"]:
-                result["objective"] = line_stripped
+        elif stripped.startswith("## "):
+            in_section = None
+            continue
 
-    # Extract target from "## Target" section
-    in_target = False
-    for line in text.split("\n"):
-        if "## Target" in line:
-            in_target = True
-            continue
-        if in_target and line.strip() and not line.startswith("#"):
-            result["target"] = line.strip()
-            break
+        if in_section and stripped and not stripped.startswith("-"):
+            if in_section == "objective" and not result["objective"]:
+                result["objective"] = stripped
+            elif in_section == "target" and not result["target"]:
+                result["target"] = stripped
 
     return result
 
 
+# ============================================================================
+# CYCLE
+# ============================================================================
+
+def run_cycle(cycle_num: int, objective: str, target_path: str,
+              decisions_path: str) -> bool:
+    """Run one propose-execute-evaluate cycle. Returns True if accepted."""
+    target_code = read_file(target_path)
+    if not target_code:
+        print(f"  WARNING: target file empty or missing: {target_path}")
+
+    print(f"\n{'='*60}")
+    print(f"  CYCLE {cycle_num}")
+    print(f"{'='*60}")
+
+    # --- PROPOSE ---
+    print(f"\n  [Proposer] {PROPOSER_MODEL} @ Forge ...")
+    t0 = time.time()
+    try:
+        proposal = call_llm(
+            PROPOSER_URL, PROPOSER_MODEL,
+            "You are a senior Python developer reviewing code for improvements. "
+            "Suggest ONE specific, bounded improvement. Be precise about what "
+            "function to change and why. Do not suggest full rewrites.",
+            f"Objective: {objective}\n\n"
+            f"File: {target_path}\n"
+            f"Code:\n```python\n{target_code}\n```\n\n"
+            f"Suggest one improvement:",
+        )
+    except Exception as e:
+        print(f"  [Proposer] FAIL ({time.time()-t0:.0f}s): {e}")
+        log_decision(decisions_path, cycle_num, f"PROPOSER_FAIL: {e}", 0, "", False)
+        return False
+
+    print(f"  [Proposer] {len(proposal)} chars ({time.time()-t0:.0f}s)")
+    print(f"  Preview: {proposal[:300]}...")
+
+    if len(proposal) < 50:
+        print("  [Proposer] Response too short -- skipping cycle")
+        log_decision(decisions_path, cycle_num, proposal, 0, "SKIPPED: proposal too short", False)
+        return False
+
+    # --- EXECUTE ---
+    print(f"\n  [Executor] {EXECUTOR_MODEL} @ Bifrost ...")
+    t0 = time.time()
+    try:
+        new_code = call_llm(
+            EXECUTOR_URL, EXECUTOR_MODEL,
+            "You are a Python code implementer. Output ONLY the modified function "
+            "or code section. Start with the def/class line. No explanations, "
+            "no markdown fences, no full file rewrites. Do not truncate.",
+            f"Apply this change to the code.\n\n"
+            f"Proposed change:\n{proposal}\n\n"
+            f"Current code:\n```python\n{target_code}\n```\n\n"
+            f"Output ONLY the modified function:",
+        )
+    except Exception as e:
+        print(f"  [Executor] FAIL ({time.time()-t0:.0f}s): {e}")
+        log_decision(decisions_path, cycle_num, proposal[:500], 0, f"EXECUTOR_FAIL: {e}", False)
+        return False
+
+    new_code = strip_fences(new_code)
+    print(f"  [Executor] {len(new_code)} chars ({time.time()-t0:.0f}s)")
+
+    if len(new_code) < 100:
+        print("  [Executor] Output too short -- skipping cycle")
+        log_decision(decisions_path, cycle_num, proposal[:500], len(new_code),
+                     "SKIPPED: executor output too short", False)
+        return False
+
+    # --- EVALUATE ---
+    print(f"\n  [Evaluator] {EVALUATOR_MODEL} @ Forge ...")
+    t0 = time.time()
+    try:
+        evaluation = call_llm(
+            EVALUATOR_URL, EVALUATOR_MODEL,
+            "You are a code quality evaluator. Compare the original and new code. "
+            "Reply with PASS or FAIL on the FIRST LINE, followed by one paragraph "
+            "of reasoning. PASS means the change is correct and improves the code.",
+            f"Objective: {objective}\n\n"
+            f"Original code:\n```python\n{target_code[-4000:]}\n```\n\n"
+            f"Proposed change:\n{proposal[:1000]}\n\n"
+            f"New code section:\n```python\n{new_code}\n```\n\n"
+            f"Is this an improvement? Reply PASS or FAIL on the first line:",
+        )
+    except Exception as e:
+        print(f"  [Evaluator] FAIL ({time.time()-t0:.0f}s): {e}")
+        log_decision(decisions_path, cycle_num, proposal[:500], len(new_code),
+                     f"EVALUATOR_FAIL: {e}", False)
+        return False
+
+    print(f"  [Evaluator] {len(evaluation)} chars ({time.time()-t0:.0f}s)")
+    print(f"  Response: {evaluation}")
+
+    # Parse first line for PASS/FAIL
+    first_line = evaluation.strip().split("\n")[0].strip().upper()
+    accepted = first_line.startswith("PASS")
+
+    print(f"\n  Result: {'ACCEPTED' if accepted else 'REJECTED'}")
+
+    log_decision(decisions_path, cycle_num, proposal[:800], len(new_code),
+                 evaluation[:800], accepted)
+
+    if accepted:
+        apply_result = smart_apply(target_path, target_code, new_code)
+        print(f"  [Apply] {apply_result}")
+
+    return accepted
+
+
+# ============================================================================
+# MAIN
+# ============================================================================
+
 def main():
-    import sys
-    if sys.stdout.encoding != 'utf-8':
-        sys.stdout.reconfigure(encoding='utf-8', errors='replace')
-    parser = argparse.ArgumentParser(description="BIFROST Session O â€” 3-agent cycle")
-    parser.add_argument("--program", default="program.md", help="Path to program.md")
-    parser.add_argument("--decisions", default="decisions.md", help="Path to decisions.md")
-    parser.add_argument("--max-cycles", type=int, default=5, help="Max cycles per run")
+    # Fix Windows console encoding
+    if sys.stdout.encoding != "utf-8":
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
+    parser = argparse.ArgumentParser(description="BIFROST Session O -- 3-agent cycle")
+    parser.add_argument("--program", default="program.md")
+    parser.add_argument("--decisions", default="decisions.md")
+    parser.add_argument("--max-cycles", type=int, default=5)
     args = parser.parse_args()
 
-    print("BIFROST Session O â€” Local 3-Agent Cycle")
-    print(f"  Proposer:  {PROPOSER_MODEL} @ Forge")
-    print(f"  Executor:  {EXECUTOR_MODEL} @ Bifrost")
-    print(f"  Evaluator: {EVALUATOR_MODEL} @ Forge")
-    print(f"  Program:   {args.program}")
-    print(f"  Decisions: {args.decisions}")
-    print(f"  Max cycles: {args.max_cycles}")
+    print("BIFROST Session O -- Local 3-Agent Cycle")
+    print(f"  Proposer:  {PROPOSER_MODEL} @ Forge :11434")
+    print(f"  Executor:  {EXECUTOR_MODEL} @ Bifrost :11434")
+    print(f"  Evaluator: {EVALUATOR_MODEL} @ Forge :11434")
 
     program = parse_program(args.program)
-    if not program["objective"]:
-        program["objective"] = "Improve the BIFROST AUTOPILOT agent pipeline."
-    if not program["target"]:
-        print("WARNING: No target file specified in program.md")
+    objective = program["objective"] or "Improve the code quality and robustness."
+    target = program["target"] or ""
 
-    print(f"  Objective: {program['objective'][:100]}")
-    print(f"  Target:    {program['target'] or '(none)'}")
+    print(f"  Objective: {objective}")
+    print(f"  Target:    {target or '(none)'}")
+    print(f"  Decisions: {args.decisions}")
+    print(f"  Cycles:    {args.max_cycles}")
+
+    if not target:
+        print("\nERROR: No target file in program.md")
+        return
 
     accepted_count = 0
     for cycle in range(1, args.max_cycles + 1):
         try:
-            ok = run_cycle(cycle, program, args.decisions)
+            ok = run_cycle(cycle, objective, target, args.decisions)
             if ok:
                 accepted_count += 1
         except Exception as e:
-            print(f"CYCLE {cycle} EXCEPTION: {e}")
-            log_decision(args.decisions, cycle, f"EXCEPTION: {e}", "", False)
+            print(f"\n  CYCLE {cycle} EXCEPTION: {e}")
+            log_decision(args.decisions, cycle, f"EXCEPTION: {e}", 0, "", False)
 
     print(f"\n{'='*60}")
-    print(f"SESSION COMPLETE: {accepted_count}/{args.max_cycles} accepted")
+    print(f"  SESSION COMPLETE: {accepted_count}/{args.max_cycles} accepted")
     print(f"{'='*60}")
 
 
 if __name__ == "__main__":
     main()
-
-

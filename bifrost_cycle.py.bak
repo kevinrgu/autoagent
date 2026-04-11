@@ -39,16 +39,26 @@ TIMEOUT = 300  # seconds per LLM call -- no max_tokens, let model finish
 # LLM CALL
 # ============================================================================
 
-def call_llm(client: httpx.Client, url: str, model: str, system: str, user: str) -> str:
+def call_llm(url: str, model: str, system: str, user: str) -> str:
+    """Call an Ollama endpoint. No max_tokens -- full-length response."""
     payload = {
         "model": model,
-        "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
+        "messages": [
+            {"role": "system", "content": system},
+            {"role": "user", "content": user},
+        ],
         "stream": False,
         "temperature": 0.7,
     }
-    r = client.post(url, json=payload, timeout=TIMEOUT)
+    r = httpx.post(url, json=payload, timeout=TIMEOUT)
     r.raise_for_status()
     return r.json()["choices"][0]["message"]["content"]
+
+
+# ============================================================================
+# HELPERS
+# ============================================================================
+
 def read_file(path: str) -> str:
     """Read a file, return empty string if missing."""
     p = Path(path)
@@ -56,10 +66,13 @@ def read_file(path: str) -> str:
 
 
 def strip_fences(text: str) -> str:
-    """Extracts code from markdown fences, handling preamble and postamble."""
-    # Search for the first occurrence of triple backticks and capture everything inside
-    match = re.search(r"```(?:python|py)?\s*(.*?)\s*```", text, re.DOTALL)
-    return match.group(1) if match else text.strip()
+    """Remove markdown code fences from LLM output."""
+    text = text.strip()
+    text = re.sub(r"^```(?:python|py)?\s*\n?", "", text)
+    text = re.sub(r"\n?```\s*$", "", text)
+    return text.strip()
+
+
 def smart_apply(target_path: str, original: str, new_code: str) -> str:
     """Apply new_code to target file. Partial patch if function detected,
     otherwise full replace. Returns description of what was done."""

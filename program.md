@@ -1,30 +1,30 @@
-# BIFROST Session O -- AutoAgent Directive
+# BIFROST Session O -- AutoAgent Directive Round 6
 
 ## Objective
 Improve the BIFROST AUTOPILOT pipeline. Hill-climb L3-L5 pass rate.
-Focus on: error handling, retry logic, timeout robustness, logging clarity.
-Do not suggest architectural rewrites or async refactors.
-One bounded change per cycle.
+Focus: error handling, retry logic, timeout robustness, logging.
+Avoid: async refactors, import changes, rewrites, multi-function changes.
+One bounded single-function change per cycle.
 
 ## Target
 C:\Users\jhpri\projects\bifrost-platform\autopilot_graph.py
 
 ## Proposer
 mistral-small3.1:24b on Bifrost (http://192.168.2.33:11434)
-Suggest one concrete, bounded improvement. Be specific about which function to change.
+Name the specific function to improve. Be concrete and brief.
 
 ## Executor
 bifrost-t2-gemma4 (gemma4:26b) on Forge (http://192.168.2.50:11434)
-Implement the proposed change. Output only the modified function. No full rewrites.
+Output only the modified function. No full file. No new imports.
 
 ## Evaluator
 bifrost-t2-gemma4 (gemma4:26b) on Forge (http://192.168.2.50:11434)
-Compare original vs new. PASS or FAIL on first line with reasoning.
-FAIL if: breaking changes, wrong imports, incomplete functions, async in sync context.
+PASS or FAIL on first line. FAIL if: breaking changes, new imports,
+async in sync context, incomplete output, changes to call_llm.
 
 ## Constraints
-- One change per cycle. No full file rewrites.
-- No async refactors.
-- No changes to imports section.
+- Single function per cycle. No rewrites.
+- No import section changes.
+- No changes to call_llm (protected).
 - Max 5 cycles per run.
-- Backup target before each run.
+- Backup before each run.

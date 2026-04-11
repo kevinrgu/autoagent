@@ -183,7 +183,7 @@ def propose(objective: str, target_path: str, target_code: str) -> str | None:
             "3. Performance optimizations.\n"
             "4. Logical correctness and edge case handling.\n"
             "Provide a clear and concise suggestion that addresses one of these aspects.",
-            f"Objective: {objective}\n\nCode:\n```python\n{target_code}\n```\n\nSuggest one improvement:",
+            f"Objective: {objective}\n\nCode:\n```python\n{target_code[:8000]}{'...[TRUNCATED]' if len(target_code) > 8000 else ''}\n```\n\nSuggest one improvement:",
         )
     except Exception as e:
         print(f"  [Proposer] FAIL ({time.time()-t0:.0f}s): {e}")
@@ -238,7 +238,7 @@ def run_cycle(cycle_num: int, objective: str, target_path: str,
                 EXECUTOR_URL, EXECUTOR_MODEL,
                 "You are a Python implementer. Output ONLY the modified function. "
                 "Start with def. No markdown fences, no explanations, no full file rewrites.",
-                f"Proposed change:\n{proposal}\n\nCurrent code:\n```python\n{target_code}\n```\n\nOutput ONLY the modified function:",
+                f"Proposed change:\n{proposal}\n\nCurrent code:\n```python\n{target_code[:8000]}{'...[TRUNCATED]' if len(target_code) > 8000 else ''}\n```\n\nOutput ONLY the modified function:",
             )
         except httpx.HTTPStatusError as e:
             error_message = f"HTTP error: {e.response.status_code} - {e.response.text}" if e.response else str(e)

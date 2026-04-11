@@ -42,34 +42,38 @@ TIMEOUT = 300  # seconds per LLM call -- no max_tokens, let model finish
 import time
 import random
 
-def call_llm(url, model, system_prompt, user_prompt, timeout=60):
-    """
-    Call the language model API with the given prompts.
+import time
+import random
 
-    :param url: The API endpoint URL.
-    :param model: The model to use.
-    :param system_prompt: The system prompt.
-    :param user_prompt: The user prompt.
-    :param timeout: The timeout value for the HTTP request in seconds.
-    :return: The response from the language model API.
-    """
-    headers = {
-        "Content-Type": "application/json",
-    }
-    data = {
+def call_llm(url: str, model: str, system: str, user: str) -> str:
+    """Call an Ollama endpoint. No max_tokens -- full-length response."""
+    payload = {
         "model": model,
         "messages": [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt},
+            {"role": "system", "content": system},
+            {"role": "user", "content": user},
         ],
+        "stream": False,
+        "temperature": 0.7,
     }
 
-    try:
-        response = requests.post(url, headers=headers, json=data, timeout=timeout)
-        response.raise_for_status()
-        return response.json()["choices"][0]["message"]["content"]
-    except requests.RequestException as e:
-        raise RuntimeError(f"HTTP request failed: {e}")
+    # Retry configuration
+    max_retries = 3
+    retries = 0
+    backoff_factor = 0.3  # Initial backoff factor in seconds
+
+    while retries < max_retries:
+        try:
+            response = requests.post(url, json=payload)
+            response.raise_for_status()
+            return response.json().get('choices', [{}])[0].get('text', '')
+        except requests.RequestException as e:
+            retries += 1
+            wait_time = backoff_factor * (2 ** (retries - 1)) + random.uniform(0, 1)
+            print(f"  [call_llm] Attempt {retries} failed: {e}. Retrying in {wait_time:.2f} seconds...")
+            time.sleep(wait_time)
+
+    raise Exception(f"Failed to get a valid response after {max_retries} attempts")
 def read_file(path: str) -> str:
     """Read a file, return empty string if missing."""
     p = Path(path)
@@ -81,6 +85,9 @@ def strip_fences(text: str) -> str:
     # Search for the first occurrence of triple backticks and capture everything inside
     match = re.search(r"```(?:python|py)?\s*(.*?)\s*```", text, re.DOTALL)
     return match.group(1) if match else text.strip()
+import ast
+import astor
+
 def smart_apply(target_path: str, original: str, new_code: str) -> str:
     """Apply new_code to target file. Partial patch if function detected,
     otherwise full replace. Returns description of what was done."""
@@ -89,31 +96,33 @@ def smart_apply(target_path: str, original: str, new_code: str) -> str:
     if not new_code or len(new_code) < 20:
         return "SKIPPED: executor output too short"
 
-    # Try to find a function name in the new code
-    fn_match = re.search(r"(async\s+)?def\s+(\w+)", new_code.strip())
-    if fn_match:
-        fn_name = fn_match.group(2)
-        # Find and replace the function in the original
-        pattern = re.compile(
-            rf"(async\s+)?def\s+{re.escape(fn_name)}\b.*?"
-            rf"(?=\n(?:async\s+)?def\s|\nclass\s|\Z)",
-            re.DOTALL,
+    try:
+        # Parse the original and new code into ASTs
+        original_tree = ast.parse(original)
+        new_tree = ast.parse(new_code)
+
+        # Find the function or class to replace
+        for node in original_tree.body:
+            if isinstance(node, (ast.FunctionDef, ast.ClassDef)):
+                if node.name == new_tree.body[0].name:
+                    # Replace the original node with the new node
+                    original_tree.body[original_tree.body.index(node)] = new_tree.body[0]
+                    break
+
+        # Unparse the modified AST back into code
+        modified_code = astor.to_source(original_tree)
+
+        # Write the modified code to the file
+        with open(target_path, 'w') as f:
+            f.write(modified_code)
+
+        return f"patched function {new_tree.body[0].name}"
+
+    except Exception as e:
+        Path(target_path).write_text(
+            original.rstrip() + "\n\n\n" + new_code, encoding="utf-8"
         )
-        if pattern.search(original):
-            patched = pattern.sub(lambda _: new_code.rstrip(), original)
-            Path(target_path).write_text(patched, encoding="utf-8")
-            return f"patched function {fn_name}"
-        else:
-            Path(target_path).write_text(
-                original.rstrip() + "\n\n\n" + new_code, encoding="utf-8"
-            )
-            return f"appended new function {fn_name}"
-
-    # No function match -- full replace
-    Path(target_path).write_text(new_code, encoding="utf-8")
-    return f"full replace (no function pattern, {len(new_code)} chars)"
-
-
+        return f"appended new function {e}"
 def log_decision(path: str, cycle: int, proposal: str, evaluation: str,
                  accepted: bool, executor_len: int = 0):
     """Append a cycle entry to decisions.md."""

@@ -39,6 +39,9 @@ TIMEOUT = 300  # seconds per LLM call -- no max_tokens, let model finish
 # LLM CALL
 # ============================================================================
 
+import time
+import random
+
 def call_llm(url: str, model: str, system: str, user: str) -> str:
     """Call an Ollama endpoint. No max_tokens -- full-length response."""
     payload = {

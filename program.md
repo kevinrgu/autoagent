@@ -14,7 +14,7 @@ mistral-small3.1:24b on Bifrost (http://192.168.2.33:11434)
 Name the specific function to improve. Be concrete and brief.
 
 ## Executor
-bifrost-t2-gemma4 (gemma4:26b) on Forge (http://192.168.2.50:11434)
+bifrost-t1b on Bifrost (http://192.168.2.33:11434)
 Output only the modified function. No full file. No new imports.
 
 ## Evaluator

@@ -26,13 +26,13 @@ import httpx
 PROPOSER_URL    = "http://192.168.2.33:11434/v1/chat/completions"
 PROPOSER_MODEL  = "mistral-small3.1:24b"   # Mistral/EU on Bifrost
 
-EXECUTOR_URL    = "http://192.168.2.50:11434/v1/chat/completions"
-EXECUTOR_MODEL  = "bifrost-t2-gemma4"      # Google/US gemma4:26b on Forge -- upgraded from 12b
+EXECUTOR_URL    = "http://192.168.2.33:11434/v1/chat/completions"
+EXECUTOR_MODEL  = "bifrost-t1b"            # bifrost-t1b on Bifrost -- fixes Forge contention
 
-EVALUATOR_URL   = "http://192.168.2.50:8005/v1/chat/completions"
-EVALUATOR_MODEL = "scout"                  # Meta/US llama4:scout Q3_K_S (bartowski) on Forge :8005 via llama-server
+EVALUATOR_URL  = "http://192.168.2.50:11434/v1/chat/completions"
+EVALUATOR_MODEL = "bifrost-t2-gemma4"                  # Meta/US llama4:scout Q3_K_S (bartowski) on Forge :8005 via llama-server
 
-TIMEOUT = 300
+TIMEOUT = 360
 
 
 # ============================================================================
@@ -49,6 +49,7 @@ def call_llm(url: str, model: str, system: str, user: str) -> str:
         ],
         "stream": False,
         "temperature": 0.7,
+        "options": {"num_ctx": 8192},
     }
     r = httpx.post(url, json=payload, timeout=TIMEOUT)
     r.raise_for_status()
@@ -175,15 +176,11 @@ def propose(objective: str, target_path: str, target_code: str) -> str | None:
     try:
         proposal = call_llm(
             PROPOSER_URL, PROPOSER_MODEL,
-            "You are a senior Python developer. Suggest ONE specific, bounded improvement. "
-            "Do not suggest changes to call_llm or imports. Focus on logic improvements. "
-            "Consider the following aspects:\n"
-            "1. Code readability and maintainability.\n"
-            "2. Error handling and robustness.\n"
-            "3. Performance optimizations.\n"
-            "4. Logical correctness and edge case handling.\n"
-            "Provide a clear and concise suggestion that addresses one of these aspects.",
-            f"Objective: {objective}\n\nCode:\n```python\n{target_code[:8000]}{'...[TRUNCATED]' if len(target_code) > 8000 else ''}\n```\n\nSuggest one improvement:",
+            "You are a senior Python developer. Suggest ONE small, safe improvement. "
+            "Keep your response under 800 chars. Just state WHAT to change and WHY in 2-3 sentences, "
+            "then show the improved code snippet. No markdown headers, no numbered lists, no verbose analysis. "
+            "Do not suggest changes to call_llm or imports. No new dependencies. No signature changes.",
+            f"Objective: {objective}\n\nCode:\n```python\n{target_code[:3000]}{'...[TRUNCATED]' if len(target_code) > 3000 else ''}\n```\n\nSuggest one improvement:",
         )
     except Exception as e:
         print(f"  [Proposer] FAIL ({time.time()-t0:.0f}s): {e}")
@@ -200,7 +197,7 @@ def propose(objective: str, target_path: str, target_code: str) -> str | None:
         proposal = call_llm(
             PROPOSER_URL, PROPOSER_MODEL,
             "You are a code expert. Be brief.",
-            f"Suggest one small improvement to this Python code (not call_llm):\n```python\n{target_code[:3000]}\n```",
+            f"Suggest one small improvement to this Python code (not call_llm):\n```python\n{target_code[:3000]}{chr(10) + '...[TRUNCATED]' if len(target_code) > 3000 else ''}\n```",
         )
     except Exception as e:
         print(f"  [Proposer] Retry FAIL ({time.time()-t0:.0f}s): {e}")
@@ -238,7 +235,7 @@ def run_cycle(cycle_num: int, objective: str, target_path: str,
                 EXECUTOR_URL, EXECUTOR_MODEL,
                 "You are a Python implementer. Output ONLY the modified function. "
                 "Start with def. No markdown fences, no explanations, no full file rewrites.",
-                f"Proposed change:\n{proposal}\n\nCurrent code:\n```python\n{target_code[:8000]}{'...[TRUNCATED]' if len(target_code) > 8000 else ''}\n```\n\nOutput ONLY the modified function:",
+                f"Proposed change:\n{proposal[:1500]}\n\nCurrent code:\n```python\n{target_code[:6000]}{'...[TRUNCATED]' if len(target_code) > 6000 else ''}\n```\n\nOutput ONLY the modified function:",
             )
         except httpx.HTTPStatusError as e:
             error_message = f"HTTP error: {e.response.status_code} - {e.response.text}" if e.response else str(e)

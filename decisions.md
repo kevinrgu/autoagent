@@ -1,95 +1,20 @@
-# Session O Round 6
-# 2026-04-11 18:50 UTC
-# Proposer: mistral | Executor: gemma4:26b | Evaluator: gemma4:26b
-# Target: autopilot_graph.py (8K truncation)
+# Session O Self-Tune Round
+# Run 1 baseline
+# 2026-04-12 14:16 UTC
 
-## Cycle 1 -- 2026-04-11 22:53:56 UTC
-**Proposal:** **Improvement: Enhance Error Handling in `_run_subtask_with_semaphore`**
-
-**Aspect: Error handling and robustness**
-
-**Suggestion:**
-Add a try-except block around the `run_subtask` call in the `_run_subtask_with_semaphore` function to handle potential exceptions and ensure that the semaphore is always released, even if an error occurs. This will make the function more robust and prevent resource leaks.
-
-```python
-def _run_subtask_with_semaphore(spec) -> "SubtaskResult":
-    """Acquire tier semaphore, run subtask, release. Used by fan_out ThreadPoolExecutor."""
-    sem = _TIER_SEMAPHORES.get(spec.assigned_tier, _DEFAULT_SEMAPHORE)
-    # Per-day cloud cap gate -- check before acquiring semaphore for cloud tiers
-    if spec.assigned_tier in _CLOUD_TIER_STRINGS:
-        if check_daily_cap_exce
-
-**Executor output:** 2141 chars
-
-**Evaluator:** PASS
-The change correctly implements a robust error-handling pattern for the subtask execution. By wrapping `run_subtask` in a `try-except` block within the `with sem:` context manager, the code ensures that the semaphore is released regardless of whether the task succeeds or fails. Additionally, handling the daily cloud cap check before acquiring the semaphore is an efficient way to prevent unnecessary resource contention/blocking. The implementation of specific `SubtaskResult` returns for both "cap exceeded" (escalating to human) and "execution error" (marking as failed) allows the parent graph to handle failures gracefully rather than crashing the thread pool.
-
-**Accepted:** YES
-
-## Cycle 2 -- 2026-04-11 22:57:10 UTC
-**Proposal:** **Improvement: Enhance Error Handling in `_run_subtask_with_semaphore`**
-
-To improve the robustness of the `_run_subtask_with_semaphore` function, we can enhance the error handling to include more detailed logging and potentially retry mechanisms for transient errors. This will help in identifying and mitigating issues more effectively, thereby improving the overall reliability of the pipeline.
-
-```python
-def _run_subtask_with_semaphore(spec) -> "SubtaskResult":
-    """Acquire tier semaphore, run subtask, release. Used by fan_out ThreadPoolExecutor."""
-    sem = _TIER_SEMAPHORES.get(spec.assigned_tier, _DEFAULT_SEMAPHORE)
-    # Per-day cloud cap gate -- check before acquiring semaphore for cloud tiers
-    if spec.assigned_tier in _CLOUD_TIER_STRINGS:
-        if check_daily_cap_exceeded(cap
-
-**Executor output:** 2264 chars
-
-**Evaluator:** PASS
-The change correctly implements the proposed improvement by adding a `return` statement when the daily cloud cap is exceeded, which prevents the subtask from executing and allows the pipeline to handle the budget exhaustion gracefully. It also adds a `try-except` block around the subtask execution to catch runtime errors and return a failed `SubtaskResult` instead of allowing the worker thread to crash. This significantly improves the robustness of the `fan_out` stage in the pipeline. The use of local imports within the function scope is a valid pattern to avoid circular dependencies in complex agentic workflows.
-
-**Accepted:** YES
-
-## Cycle 3 -- 2026-04-11 23:01:40 UTC
-**Proposal:** **Suggestion: Improve Error Handling in `_run_subtask_with_semaphore`**
+## Cycle 1 -- 2026-04-12 18:25:20 UTC
+**Proposal:** **Improvement: Enhanced Error Handling and Robustness in `_run_subtask_with_semaphore`**
 
 **Current Behavior:**
-The `_run_subtask_with_semaphore` function logs an error and returns a `FAILED` status if an exception occurs during the execution of `run_subtask`. However, it does not handle transient errors or provide a mechanism for retrying the subtask.
+The `_run_subtask_with_semaphore` function attempts to run a subtask with retries and exponential backoff on failure. However, it does not handle all potential failure scenarios gracefully, especially when the semaphore acquisition fails or when the subtask execution fails repeatedly.
 
 **Improvement:**
-Implement a retry mechanism for transient errors to enhance robustness. This can be achieved by catching specific exceptions that indicate transient issues (e.g., network errors, temporary service unavailability) and retrying the subtask a limited number of times before failing permanently.
+Add more granular error handling to distinguish between different types of failures (e.g., semaphore acquisition failures, subtask execution failures) and log these failures with more context. Additionally, ensure that the semaphore is released even if an exception occurs during the subtask execution.
 
 **Implementation:**
 
 ```python
-import time
-from bifrost_message import SubtaskResult, compute_checksum
-from some_module import TransientError  # Assumi
-
-**Executor output:** 1080 chars
-
-**Evaluator:** FAIL
-
-**Reasoning:**
-The proposed code is incomplete and introduces several critical issues:
-1. **Broken Syntax/Incomplete Code:** The implementation ends abruptly in the middle of a dictionary assignment (`"escalation_artifact":{"`), which will cause a `SyntaxError`.
-2. **Missing Imports/Dependencies:** The code references `_TIER_SEMAPHORES`, `_DEFAULT_SEMAPHORE`, `_CLOUD_TIER_STRINGS`, `check_daily_cap_exceeded`, `log`, and `spec` (as a type/object) without defining or importing them in the provided snippet.
-3. **Broken Logic/Scope:** The implementation imports `SubtaskResult` and `compute_checksum` *inside* an `if` block, which is inefficient and makes the code harder to maintain.
-4. **Unfulfilled Objective:** The "Improvement" description promises a retry mechanism for transient errors
-
-**Accepted:** NO
-
-## Cycle 3 -- 2026-04-11 23:04:56 UTC
-**Proposal:** **Suggestion: Improve Error Handling in `_run_subtask_with_semaphore`**
-
-**Current Behavior:**
-The `_run_subtask_with_semaphore` function logs an error and returns a `FAILED` status if an exception occurs during the execution of `run_subtask`. However, it does not handle transient errors or provide a mechanism for retrying the subtask.
-
-**Improvement:**
-Implement a retry mechanism for transient errors to enhance robustness. This can be achieved by catching specific exceptions that indicate transient issues (e.g., network errors, temporary service unavailability) and retrying the subtask a limited number of times before failing permanently.
-
-**Implementation:**
-
-```python
-import time
-from bifrost_message import SubtaskResult, compute_checksum
-from some_module import TransientError  # Assumi
+def _run_subtask_with_semaphore(spec) -> "Subtask
 
 **Executor output:** 0 chars
 
@@ -97,159 +22,119 @@ from some_module import TransientError  # Assumi
 
 **Accepted:** NO
 
-## Cycle 4 -- 2026-04-11 23:08:42 UTC
-**Proposal:** ### Suggested Improvement: Enhance Error Handling in `_run_subtask_with_semaphore`
+## Cycle 2 -- 2026-04-12 18:30:20 UTC
+**Proposal:** ### Improvement: Enhance Error Handling in `_run_subtask_with_semaphore`
 
-**Aspect: Error handling and robustness**
+**Current Issue:**
+The `_run_subtask_with_semaphore` function handles errors by logging them and returning a `SubtaskResult` with a `FAILED` status. However, it does not account for scenarios where the semaphore acquisition fails or times out.
 
-**Suggestion:**
-
-Add a retry mechanism with exponential backoff for transient errors in the `_run_subtask_with_semaphore` function. This will make the system more robust and resilient to temporary issues that might occur during subtask execution.
-
-**Implementation:**
+**Improvement:**
+Add a timeout mechanism for semaphore acquisition to handle scenarios where the semaphore is not released in a timely manner. This will make the function more robust and prevent it from hanging indefinitely.
 
 ```python
-def _run_subtask_with_semaphore(spec) -> "SubtaskResult":
-    """Acquire tier semaphore, run subtask, release. Used by fan_out ThreadPoolExecutor."""
-    sem = _TIER_SEMAPHORES.get(spec.assigned_tier, _DEFAULT_SEMAPHORE)
-    # Per-day cloud cap gate -- check before acquiring semaphore for cloud tiers
-    if spec.assigned_tier in _CLOUD_TIER_STRINGS:
-        if check_daily_cap_exceeded(cap_us
+import threading
+import time
+from contextlib import contextmanager
 
-**Executor output:** 2649 chars
+@contextmanager
+def acquire_semaphore_with_timeout(sem: threading.Semaphore, timeout: float):
+    acquired = sem.acquire(timeout=timeout)
+    try:
+        if acquired:
+         
+
+**Executor output:** 3790 chars
 
 **Evaluator:** FAIL
-
-The proposed change introduces a significant architectural flaw and a potential runtime error:
-
-1. **Concurrency Bottleneck (Breaking Change):** The retry logic and `time.sleep` are implemented *inside* the `with sem:` block. This means the semaphore for the specific tier is held throughout the entire duration of the retry attempts and the exponential backoff sleep periods. In a multi-threaded environment (like the `ThreadPoolExecutor` mentioned in the docstring), this prevents any other subtask from acquiring the semaphore for that tier, effectively turning parallel execution into serial execution for that tier whenever a retry is in progress. The retry loop should be placed *outside* the semaphore acquisition block so the semaphore is only held during the actual `run_subtask` execu
+The proposed change introduces a breaking change in the form of an `AttributeError`. In the line `log.debug(f"Subtask {spec.sublang_id} waiting for tier={spec.assigned_tier} semaphore")`, the code attempts to access `spec.sublang_id`, whereas the rest of the function and the existing logic consistently use `spec.subtask_id`. This typo will cause the function to crash whenever it reaches that debug log. Additionally, the `contextmanager` provided in the "Improvement" description is not actually utilized in the "New code" implementation.
 
 **Accepted:** NO
 
-## Cycle 4 -- 2026-04-11 23:10:07 UTC
-**Proposal:** ### Suggested Improvement: Enhance Error Handling in `_run_subtask_with_semaphore`
+## Cycle 2 -- 2026-04-12 18:32:08 UTC
+**Proposal:** ### Improvement: Enhance Error Handling in `_run_subtask_with_semaphore`
 
-**Aspect: Error handling and robustness**
+**Current Issue:**
+The `_run_subtask_with_semaphore` function handles errors by logging them and returning a `SubtaskResult` with a `FAILED` status. However, it does not account for scenarios where the semaphore acquisition fails or times out.
 
-**Suggestion:**
-
-Add a retry mechanism with exponential backoff for transient errors in the `_run_subtask_with_semaphore` function. This will make the system more robust and resilient to temporary issues that might occur during subtask execution.
-
-**Implementation:**
+**Improvement:**
+Add a timeout mechanism for semaphore acquisition to handle scenarios where the semaphore is not released in a timely manner. This will make the function more robust and prevent it from hanging indefinitely.
 
 ```python
-def _run_subtask_with_semaphore(spec) -> "SubtaskResult":
-    """Acquire tier semaphore, run subtask, release. Used by fan_out ThreadPoolExecutor."""
-    sem = _TIER_SEMAPHORES.get(spec.assigned_tier, _DEFAULT_SEMAPHORE)
-    # Per-day cloud cap gate -- check before acquiring semaphore for cloud tiers
-    if spec.assigned_tier in _CLOUD_TIER_STRINGS:
-        if check_daily_cap_exceeded(cap_us
+import threading
+import time
+from contextlib import contextmanager
 
-**Executor output:** 2649 chars
+@contextmanager
+def acquire_semaphore_with_timeout(sem: threading.Semaphore, timeout: float):
+    acquired = sem.acquire(timeout=timeout)
+    try:
+        if acquired:
+         
 
-**Evaluator:** PASS
-The implementation correctly introduces a retry mechanism with exponential backoff and handles the edge case of exceeding the daily cloud cap by returning a specific `SubtaskResult` status (`FAILED_NEEDS_HUMAN`). The logic for the retry loop and the backoff calculation is sound, and the error handling ensures that even after all retries fail, a valid `SubtaskResult` is returned to prevent the pipeline from crashing.
-
-**Accepted:** YES
-
-## Cycle 5 -- 2026-04-11 23:13:38 UTC
-**Proposal:** **Improvement: Add Exponential Backoff with Jitter to Retry Mechanism**
-
-**Aspect Addressed:** Error handling and robustness
-
-**Suggestion:**
-
-Modify the retry mechanism in the `_run_subtask_with_semaphore` function to include jitter in the exponential backoff strategy. This will help distribute the retry attempts more evenly over time, reducing the likelihood of retries overwhelming the system or hitting rate limits simultaneously.
-
-**Code Change:**
-
-```python
-def _run_subtask_with_semaphore(spec) -> "SubtaskResult":
-    """Acquire tier semaphore, run subtask, release. Used by fan_out ThreadPoolExecutor."""
-    sem = _TIER_SEMAPHORES.get(spec.assigned_tier, _DEFAULT_SEMAPHORE)
-    # Per-day cloud cap gate -- check before acquiring semaphore for cloud tiers
-    if spec.assigned_tier in _CL
-
-**Executor output:** 1109 chars
+**Executor output:** 4035 chars
 
 **Evaluator:** FAIL
 
-**Reasoning:**
-The proposed change is incomplete and contains syntax errors. The code snippet ends abruptly mid-string/mid-expression (`"error": "daily cloud cap $2`), leaving the `SubtaskResult` instantiation and the function itself unclosed. This would result in a `SyntaxError` and break the entire module. Additionally, while the suggestion claims to implement "Exponential Backoff with Jitter," the provided code only contains an `import random` and does not actually implement any retry logic or backoff algorithm.
+The proposed change introduces a bug due to a typo: `spec.sublang_id` is used in a log statement, whereas all other parts of the function and the surrounding context use `spec.subtask_id`. This will raise an `AttributeError` at runtime when the function attempts to log the waiting status.
+
+Additionally, the code quality is poor due to:
+1.  **Violation of DRY (Don't Repeat Yourself):** The imports `from bifrost_message import SubtaskResult, compute_checksum` are repeated multiple times within different conditional branches of the same function.
+2.  **Inefficient Implementation:** The `acquire_semaphore_with_timeout` context manager is redefined every time `_run_subtask_with_semaphore` is called, which is computationally redundant.
+3.  **Scope/Structure Issues:** Defining a context man
 
 **Accepted:** NO
 
-## Cycle 5 -- 2026-04-11 23:14:05 UTC
-**Proposal:** **Improvement: Add Exponential Backoff with Jitter to Retry Mechanism**
+## Cycle 2 -- 2026-04-12 18:33:28 UTC
+**Proposal:** ### Improvement: Enhance Error Handling in `_run_subtask_with_semaphore`
 
-**Aspect Addressed:** Error handling and robustness
+**Current Issue:**
+The `_run_subtask_with_semaphore` function handles errors by logging them and returning a `SubtaskResult` with a `FAILED` status. However, it does not account for scenarios where the semaphore acquisition fails or times out.
 
-**Suggestion:**
-
-Modify the retry mechanism in the `_run_subtask_with_semaphore` function to include jitter in the exponential backoff strategy. This will help distribute the retry attempts more evenly over time, reducing the likelihood of retries overwhelming the system or hitting rate limits simultaneously.
-
-**Code Change:**
+**Improvement:**
+Add a timeout mechanism for semaphore acquisition to handle scenarios where the semaphore is not released in a timely manner. This will make the function more robust and prevent it from hanging indefinitely.
 
 ```python
-def _run_subtask_with_semaphore(spec) -> "SubtaskResult":
-    """Acquire tier semaphore, run subtask, release. Used by fan_out ThreadPoolExecutor."""
-    sem = _TIER_SEMAPHORES.get(spec.assigned_tier, _DEFAULT_SEMAPHORE)
-    # Per-day cloud cap gate -- check before acquiring semaphore for cloud tiers
-    if spec.assigned_tier in _CL
+import threading
+import time
+from contextlib import contextmanager
 
-**Executor output:** 2744 chars
+@contextmanager
+def acquire_semaphore_with_timeout(sem: threading.Semaphore, timeout: float):
+    acquired = sem.acquire(timeout=timeout)
+    try:
+        if acquired:
+         
+
+**Executor output:** 4035 chars
 
 **Evaluator:** FAIL
 
 **Reasoning:**
-The change introduces a breaking bug in the logging statement: `log.debug(f"Subtask {spec.sublag_id} waiting for tier={spec.assigned_tier} semaphore")`. The attribute `sublag_id` does not exist on the `spec` object (it should be `subtask_id`), which will cause an `AttributeError` at runtime whenever a subtask attempts to log its wait status. Additionally, the `import random` is placed inside the function body, which is inefficient for a function likely called frequently in a `ThreadPoolExecutor`.
+1. **Bug (AttributeError):** The code introduces a typo in the log statement: `log.debug(f"Subtask {spec.sublang_id} waiting...")`. It uses `sublang_id` instead of `subtask_id` (which is used correctly in the subsequent line). This will cause the function to crash with an `AttributeError` whenever a subtask begins waiting for a semaphore.
+2. **Inneficiency:** The `acquire_semaphore_with_timeout` context manager is defined inside the function scope. This means the context manager is re-defined every single time `_run_subtask_with_semaphore` is called, which is inefficient and poor practice. It should be defined at the module level.
 
 **Accepted:** NO
 
-## Cycle 5 -- 2026-04-11 23:15:46 UTC
-**Proposal:** **Improvement: Add Exponential Backoff with Jitter to Retry Mechanism**
+## Cycle 2 -- 2026-04-12 18:33:28 UTC
+**Proposal:** ### Improvement: Enhance Error Handling in `_run_subtask_with_semaphore`
 
-**Aspect Addressed:** Error handling and robustness
+**Current Issue:**
+The `_run_subtask_with_semaphore` function handles errors by logging them and returning a `SubtaskResult` with a `FAILED` status. However, it does not account for scenarios where the semaphore acquisition fails or times out.
 
-**Suggestion:**
-
-Modify the retry mechanism in the `_run_subtask_with_semaphore` function to include jitter in the exponential backoff strategy. This will help distribute the retry attempts more evenly over time, reducing the likelihood of retries overwhelming the system or hitting rate limits simultaneously.
-
-**Code Change:**
+**Improvement:**
+Add a timeout mechanism for semaphore acquisition to handle scenarios where the semaphore is not released in a timely manner. This will make the function more robust and prevent it from hanging indefinitely.
 
 ```python
-def _run_subtask_with_semaphore(spec) -> "SubtaskResult":
-    """Acquire tier semaphore, run subtask, release. Used by fan_out ThreadPoolExecutor."""
-    sem = _TIER_SEMAPHORES.get(spec.assigned_tier, _DEFAULT_SEMAPHORE)
-    # Per-day cloud cap gate -- check before acquiring semaphore for cloud tiers
-    if spec.assigned_tier in _CL
+import threading
+import time
+from contextlib import contextmanager
 
-**Executor output:** 1918 chars
-
-**Evaluator:** FAIL
-
-**Reasoning:**
-The proposed code change is incomplete and contains syntax errors that will cause the program to crash. Specifically, the code ends abruptly with `time.` at the end of the snippet, which is a `SyntaxError`. Additionally, the logic for the retry loop is truncated, leaving the `time.sleep()` call (or similar) unwritten.
-
-**Accepted:** NO
-
-## Cycle 5 -- 2026-04-11 23:15:46 UTC
-**Proposal:** **Improvement: Add Exponential Backoff with Jitter to Retry Mechanism**
-
-**Aspect Addressed:** Error handling and robustness
-
-**Suggestion:**
-
-Modify the retry mechanism in the `_run_subtask_with_semaphore` function to include jitter in the exponential backoff strategy. This will help distribute the retry attempts more evenly over time, reducing the likelihood of retries overwhelming the system or hitting rate limits simultaneously.
-
-**Code Change:**
-
-```python
-def _run_subtask_with_semaphore(spec) -> "SubtaskResult":
-    """Acquire tier semaphore, run subtask, release. Used by fan_out ThreadPoolExecutor."""
-    sem = _TIER_SEMAPHORES.get(spec.assigned_tier, _DEFAULT_SEMAPHORE)
-    # Per-day cloud cap gate -- check before acquiring semaphore for cloud tiers
-    if spec.assigned_tier in _CL
+@contextmanager
+def acquire_semaphore_with_timeout(sem: threading.Semaphore, timeout: float):
+    acquired = sem.acquire(timeout=timeout)
+    try:
+        if acquired:
+         
 
 **Executor output:** 0 chars
 
@@ -257,5 +142,295 @@ def _run_subtask_with_semaphore(spec) -> "SubtaskResult":
 
 **Accepted:** NO
 
-## Run Summary -- 2026-04-11 23:15 UTC
-Accepted: 3/5 | Models: mistral-small3.1:24b -> bifrost-t2-gemma4 -> bifrost-t2-gemma4
+## Cycle 3 -- 2026-04-12 18:41:00 UTC
+**Proposal:** **Improvement: Optimize Semaphore Management for Better Resource Utilization and Performance**
+
+**Issue:**
+The current semaphore management in the `_run_subtask_with_semaphore` function does not handle the release of semaphores in case of exceptions or retries efficiently. This can lead to suboptimal resource utilization and potential deadlocks or starvations.
+
+**Suggestion:**
+Refactor the semaphore management to ensure that semaphores are always released after each attempt, regardless of success or failure. Additionally, use a context manager to handle the semaphore acquisition and release more cleanly.
+
+**Implementation:**
+
+```python
+def _run_subtask_with_semaphore(spec) -> "SubtaskResult":
+    """Acquire tier semaphore, run subtask, release. Used by fan_out ThreadPoolExecutor."""
+    se
+
+**Executor output:** 0 chars
+
+**Evaluator:** EXECUTOR/EVALUATOR FAIL after retries
+
+**Accepted:** NO
+
+## Cycle 4 -- 2026-04-12 18:45:26 UTC
+**Proposal:** **Improvement: Enhance Error Handling in `_run_subtask_with_semaphore`**
+
+**Current Issue:**
+The `_run_subtask_with_semaphore` function has a retry mechanism with exponential backoff, but it does not handle specific types of exceptions differently. This can lead to unnecessary retries for exceptions that are not likely to resolve with retries (e.g., network issues, configuration errors).
+
+**Suggestion:**
+Add specific exception handling to differentiate between transient errors (which can benefit from retries) and permanent errors (which should be logged and handled immediately).
+
+**Implementation:**
+```python
+def _run_subtask_with_semaphore(spec) -> "SubtaskResult":
+    """Acquire tier semaphore, run subtask, release. Used by fan_out ThreadPoolExecutor."""
+    sem = _TIER_SEMAPHORES.get(sp
+
+**Executor output:** 3543 chars
+
+**Evaluator:** FAIL
+
+**Reasoning:**
+The change introduces a breaking dependency on `asyncio` and `time` within the `_run_subtask_with_semaphore` function without showing them being imported. More critically, the logic introduces a hardcoded cloud cap check (`check_daily_cap_exceeded(cap_usd=20.0)`) that ignores the `budget_usd` parameter defined in the `AutopilotState` and the `run_autopilot` function. This makes the pipeline's budget management unpredictable and non-configurable via the public API. Additionally, the use of `from bifrost_message import ...` inside the function scope is a code smell that suggests poor architectural organization.
+
+**Accepted:** NO
+
+## Cycle 4 -- 2026-04-12 18:47:11 UTC
+**Proposal:** **Improvement: Enhance Error Handling in `_run_subtask_with_semaphore`**
+
+**Current Issue:**
+The `_run_subtask_with_semaphore` function has a retry mechanism with exponential backoff, but it does not handle specific types of exceptions differently. This can lead to unnecessary retries for exceptions that are not likely to resolve with retries (e.g., network issues, configuration errors).
+
+**Suggestion:**
+Add specific exception handling to differentiate between transient errors (which can benefit from retries) and permanent errors (which should be logged and handled immediately).
+
+**Implementation:**
+```python
+def _run_subtask_with_semaphore(spec) -> "SubtaskResult":
+    """Acquire tier semaphore, run subtask, release. Used by fan_out ThreadPoolExecutor."""
+    sem = _TIER_SEMAPHORES.get(sp
+
+**Executor output:** 1782 chars
+
+**Evaluator:** FAIL
+
+**Reasoning:**
+The proposed code is incomplete and contains a syntax error/truncated logic. Specifically, the `for` loop and the `except` block are left unfinished (the code ends abruptly with `if attempt < max_retries - 1:`), which would result in a `SyntaxError`. Additionally, the implementation introduces a hardcoded value (`cap_usd=20.0`) which should ideally be driven by the `budget_usd` in the `AutopilotState` rather than a magic number.
+
+**Accepted:** NO
+
+## Cycle 4 -- 2026-04-12 18:49:28 UTC
+**Proposal:** **Improvement: Enhance Error Handling in `_run_subtask_with_semaphore`**
+
+**Current Issue:**
+The `_run_subtask_with_semaphore` function has a retry mechanism with exponential backoff, but it does not handle specific types of exceptions differently. This can lead to unnecessary retries for exceptions that are not likely to resolve with retries (e.g., network issues, configuration errors).
+
+**Suggestion:**
+Add specific exception handling to differentiate between transient errors (which can benefit from retries) and permanent errors (which should be logged and handled immediately).
+
+**Implementation:**
+```python
+def _run_subtask_with_semaphore(spec) -> "SubtaskResult":
+    """Acquire tier semaphore, run subtask, release. Used by fan_out ThreadPoolExecutor."""
+    sem = _TIER_SEMAPHORES.get(sp
+
+**Executor output:** 3543 chars
+
+**Evaluator:** PASS
+The implementation correctly addresses the objective of improving the pipeline's error handling and retry logic. It differentiates between transient errors (which trigger exponential backoff) and permanent errors (which fail immediately), and it introduces a specific status (`FAILED_NEEDS_HUMAN`) for when the cloud budget cap is exceeded, which aligns with the goal of improving pass rates/handling. The use of local imports avoids circular dependency issues, and the retry mechanism is implemented correctly.
+
+**Accepted:** YES
+
+## Cycle 5 -- 2026-04-12 18:59:29 UTC
+**Proposal:** PROPOSER_FAIL
+
+**Executor output:** 0 chars
+
+**Evaluator:** 
+
+**Accepted:** NO
+
+## Run Summary -- 2026-04-12 18:59 UTC
+Accepted: 1/5 | Models: mistral-small3.1:24b -> bifrost-t2-gemma4 -> bifrost-t2-gemma4
+
+# Run 2 post-fix
+# 2026-04-12 15:00 UTC
+
+## Cycle 1 -- 2026-04-12 19:13:01 UTC
+**Proposal:** PROPOSER_FAIL
+
+**Executor output:** 0 chars
+
+**Evaluator:** 
+
+**Accepted:** NO
+
+## Cycle 2 -- 2026-04-12 19:25:02 UTC
+**Proposal:** PROPOSER_FAIL
+
+**Executor output:** 0 chars
+
+**Evaluator:** 
+
+**Accepted:** NO
+
+## Cycle 3 -- 2026-04-12 19:37:03 UTC
+**Proposal:** PROPOSER_FAIL
+
+**Executor output:** 0 chars
+
+**Evaluator:** 
+
+**Accepted:** NO
+
+## Cycle 4 -- 2026-04-12 19:49:04 UTC
+**Proposal:** PROPOSER_FAIL
+
+**Executor output:** 0 chars
+
+**Evaluator:** 
+
+**Accepted:** NO
+
+## Cycle 5 -- 2026-04-12 20:01:05 UTC
+**Proposal:** PROPOSER_FAIL
+
+**Executor output:** 0 chars
+
+**Evaluator:** 
+
+**Accepted:** NO
+
+## Run Summary -- 2026-04-12 20:01 UTC
+Accepted: 0/5 | Models: mistral-small3.1:24b -> bifrost-t2-gemma4 -> bifrost-t2-gemma4
+
+# Run 2b post-fix (context window + truncation)
+# 2026-04-12 16:02 UTC
+
+## Cycle 1 -- 2026-04-12 20:14:27 UTC
+**Proposal:** PROPOSER_FAIL
+
+**Executor output:** 0 chars
+
+**Evaluator:** 
+
+**Accepted:** NO
+
+## Cycle 2 -- 2026-04-12 20:26:28 UTC
+**Proposal:** PROPOSER_FAIL
+
+**Executor output:** 0 chars
+
+**Evaluator:** 
+
+**Accepted:** NO
+
+## Cycle 3 -- 2026-04-12 20:38:30 UTC
+**Proposal:** PROPOSER_FAIL
+
+**Executor output:** 0 chars
+
+**Evaluator:** 
+
+**Accepted:** NO
+
+## Cycle 4 -- 2026-04-12 20:50:39 UTC
+**Proposal:** To improve the code, refactor the `_run_async` function to avoid importing `concurrent.futures` inside the function. Instead, import it at the top of the file. This will make the function cleaner and avoid potential issues with re-importing modules.
+
+```python
+import concurrent.futures as _cf
+
+def _run_async(coro):
+    try:
+        asyncio.get_running_loop()
+        with _cf.ThreadPoolExecutor(max_workers=1) as ex:
+            return ex.submit(asyncio.run, coro).result()
+    except RuntimeError:
+        return asyncio.run(coro)
+```
+
+**Executor output:** 746 chars
+
+**Evaluator:** FAIL
+
+The proposed change introduces a breaking change due to a NameError. The `ThreadPoolExecutor` is used in the new code, but unlike the "Proposed" refactoring suggestion, it is not imported at the top of the file (the provided "New code" snippet lacks the `from concurrent.futures import ThreadPoolExecutor` import). 
+
+Additionally, the change is a refactor of an internal helper function (`_run_async`) that was not present in the "Original" code provided, making it impossible to verify if the logic integration is correct or if it breaks existing dependencies within the scope of the provided snippet.
+
+**Accepted:** NO
+
+## Cycle 4 -- 2026-04-12 20:52:33 UTC
+**Proposal:** To improve the code, refactor the `_run_async` function to avoid importing `concurrent.futures` inside the function. Instead, import it at the top of the file. This will make the function cleaner and avoid potential issues with re-importing modules.
+
+```python
+import concurrent.futures as _cf
+
+def _run_async(coro):
+    try:
+        asyncio.get_running_loop()
+        with _cf.ThreadPoolExecutor(max_workers=1) as ex:
+            return ex.submit(asyncio.run, coro).result()
+    except RuntimeError:
+        return asyncio.run(coro)
+```
+
+**Executor output:** 746 chars
+
+**Evaluator:** FAIL
+
+The proposed change introduces a breaking change: it removes the `_` prefix from `ThreadPoolExecutor` (changing it to `ThreadPoolExecutor`), but the "New code" block does not include the necessary import for `ThreadPoolExecutor` at the top of the file. While the "Proposed" section suggests importing `concurrent.futures as _cf`, the actual "New code" block uses the unqualified name `ThreadPoolExecutor`. Unless `ThreadPoolExecutor` is already imported globally (which is not shown in the provided context), this will result in a `NameError`.
+
+**Accepted:** NO
+
+## Cycle 4 -- 2026-04-12 20:52:33 UTC
+**Proposal:** To improve the code, refactor the `_run_async` function to avoid importing `concurrent.futures` inside the function. Instead, import it at the top of the file. This will make the function cleaner and avoid potential issues with re-importing modules.
+
+```python
+import concurrent.futures as _cf
+
+def _run_async(coro):
+    try:
+        asyncio.get_running_loop()
+        with _cf.ThreadPoolExecutor(max_workers=1) as ex:
+            return ex.submit(asyncio.run, coro).result()
+    except RuntimeError:
+        return asyncio.run(coro)
+```
+
+**Executor output:** 0 chars
+
+**Evaluator:** EXECUTOR/EVALUATOR FAIL after retries
+
+**Accepted:** NO
+
+## Cycle 5 -- 2026-04-12 20:53:07 UTC
+**Proposal:** Convert the logging calls to use `logging.exception` instead of `logging.error` when an exception is caught in `_run_async`. This will include the traceback in the log, aiding in debugging.
+
+```python
+        except RuntimeError:
+            log.exception(f"RuntimeError encountered, retrying (attempt {attempt + 1}/{max_retries})")
+```
+
+**Executor output:** 939 chars
+
+**Evaluator:** FAIL
+
+The change introduces a logical flaw in the error handling: `log.exception` is used inside an `except RuntimeError` block that is specifically designed to catch the `RuntimeError` raised by `asyncio.get_running_loop()`. 
+
+When `asyncio.get_running_loop()` raises a `RuntimeError` (because a loop is already running), the code enters the `except` block. Using `log.exception` here will log a full traceback of the `RuntimeError`. However, this `RuntimeError` is a **known, expected control-flow exception** used to detect the environment state, not an unexpected error. Logging a full stack trace for a normal operational branch (detecting an existing loop) creates significant log noise and misleading "error" alerts in production monitoring. 
+
+Furthermore, the retry logic is redundant for thi
+
+**Accepted:** NO
+
+## Cycle 5 -- 2026-04-12 20:53:21 UTC
+**Proposal:** Convert the logging calls to use `logging.exception` instead of `logging.error` when an exception is caught in `_run_async`. This will include the traceback in the log, aiding in debugging.
+
+```python
+        except RuntimeError:
+            log.exception(f"RuntimeError encountered, retrying (attempt {attempt + 1}/{max_retries})")
+```
+
+**Executor output:** 939 chars
+
+**Evaluator:** PASS
+
+The change improves the debuggability of the `_run_async` utility. Using `log.exception` within an `except` block is a best practice because it automatically captures and logs the full stack trace, which is critical for diagnosing why `asyncio.run` is encountering a `RuntimeError` (usually due to nested event loops) in a production/k3d environment. The logic for retries and exponential backoff remains intact and functional.
+
+**Accepted:** YES
+
+## Run Summary -- 2026-04-12 20:53 UTC
+Accepted: 1/5 | Models: mistral-small3.1:24b -> bifrost-t2-gemma4 -> bifrost-t2-gemma4

@@ -29,8 +29,8 @@ PROPOSER_MODEL  = "mistral-small3.1:24b"   # Mistral/EU on Bifrost
 EXECUTOR_URL    = "http://192.168.2.50:11434/v1/chat/completions"
 EXECUTOR_MODEL  = "bifrost-t2-gemma4"      # Google/US gemma4:26b on Forge -- upgraded from 12b
 
-EVALUATOR_URL   = "http://192.168.2.50:11434/v1/chat/completions"
-EVALUATOR_MODEL = "bifrost-t2-gemma4"      # Google/US gemma4:26b on Forge -- same model, different prompt
+EVALUATOR_URL   = "http://192.168.2.50:8005/v1/chat/completions"
+EVALUATOR_MODEL = "scout"                  # Meta/US llama4:scout Q3_K_S (bartowski) on Forge :8005 via llama-server
 
 TIMEOUT = 300
 

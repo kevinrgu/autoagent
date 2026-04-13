@@ -11,6 +11,7 @@ No max_tokens -- let models respond at full length.
 """
 
 import argparse
+import ast
 import re
 import sys
 import time
@@ -143,6 +144,24 @@ def backup_target(target_path: str):
         print(f"  [Backup] {p.name} -> {bak.name}")
 
 
+def extract_signatures(code: str) -> str:
+    """Extract function/class signatures for proposer context."""
+    lines = []
+    try:
+        for node in ast.walk(ast.parse(code)):
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                prefix = "async def" if isinstance(node, ast.AsyncFunctionDef) else "def"
+                lines.append(f"  {prefix} {node.name}(...) [line {node.lineno}]")
+    except SyntaxError:
+        lines.append("  (could not parse file -- syntax error)")
+    return "\n".join(lines)
+
+
+# Rejection feedback buffer (persists across cycles within a run)
+_recent_rejections: list[str] = []
+MAX_REJECTION_HISTORY = 3
+
+
 def parse_program(path: str) -> dict:
     text = read_file(path)
     result = {"objective": "", "target": ""}
@@ -172,15 +191,37 @@ def parse_program(path: str) -> dict:
 
 def propose(objective: str, target_path: str, target_code: str) -> str | None:
     print(f"\n  [Proposer] {PROPOSER_MODEL} @ Bifrost ...")
+
+    # Build signature summary for proposer context
+    sig_summary = extract_signatures(target_code)
+
+    # Build rejection feedback section
+    rejection_section = ""
+    if _recent_rejections:
+        items = "\n".join(f"  {i+1}. {r}" for i, r in enumerate(_recent_rejections))
+        rejection_section = f"\n\nAVOID THESE PATTERNS (recently rejected):\n{items}"
+
+    system_prompt = (
+        "You are a senior Python developer. Suggest ONE small, safe improvement. "
+        "Keep your response under 800 chars. Just state WHAT to change and WHY in 2-3 sentences, "
+        "then show the improved code snippet. No markdown headers, no numbered lists, no verbose analysis. "
+        "Do not suggest changes to call_llm or imports. No new dependencies. No signature changes.\n\n"
+        "CRITICAL CODE RULES FOR THIS FILE:\n"
+        "- LangGraph node functions are SYNC (def, not async def)\n"
+        "- To call async functions from sync context, use: _run_async(async_coroutine)\n"
+        "- NEVER use raw 'await' in a sync def -- always wrap with _run_async()\n"
+        "- The _run_async() helper already exists in the file\n"
+        "- Check the function signatures below to know which functions are async vs sync\n\n"
+        f"FUNCTION SIGNATURES:\n{sig_summary}"
+        f"{rejection_section}"
+    )
+
     t0 = time.time()
     try:
         proposal = call_llm(
             PROPOSER_URL, PROPOSER_MODEL,
-            "You are a senior Python developer. Suggest ONE small, safe improvement. "
-            "Keep your response under 800 chars. Just state WHAT to change and WHY in 2-3 sentences, "
-            "then show the improved code snippet. No markdown headers, no numbered lists, no verbose analysis. "
-            "Do not suggest changes to call_llm or imports. No new dependencies. No signature changes.",
-            f"Objective: {objective}\n\nCode:\n```python\n{target_code[:3000]}{'...[TRUNCATED]' if len(target_code) > 3000 else ''}\n```\n\nSuggest one improvement:",
+            system_prompt,
+            f"Objective: {objective}\n\nCode:\n```python\n{target_code[:5000]}{'...[TRUNCATED]' if len(target_code) > 5000 else ''}\n```\n\nSuggest one improvement:",
         )
     except Exception as e:
         print(f"  [Proposer] FAIL ({time.time()-t0:.0f}s): {e}")
@@ -197,7 +238,7 @@ def propose(objective: str, target_path: str, target_code: str) -> str | None:
         proposal = call_llm(
             PROPOSER_URL, PROPOSER_MODEL,
             "You are a code expert. Be brief.",
-            f"Suggest one small improvement to this Python code (not call_llm):\n```python\n{target_code[:3000]}{chr(10) + '...[TRUNCATED]' if len(target_code) > 3000 else ''}\n```",
+            f"Suggest one small improvement to this Python code (not call_llm). NEVER use raw 'await' in sync def -- use _run_async() instead.\n```python\n{target_code[:5000]}{chr(10) + '...[TRUNCATED]' if len(target_code) > 5000 else ''}\n```",
         )
     except Exception as e:
         print(f"  [Proposer] Retry FAIL ({time.time()-t0:.0f}s): {e}")
@@ -317,6 +358,12 @@ def run_cycle(cycle_num: int, objective: str, target_path: str,
                 print(f"  [Apply] FAIL: {str(e)}")
                 retries += 1
                 continue
+
+        # Track rejection reason for feedback loop
+        reason = evaluation.strip().split("\n")[0][:120]
+        _recent_rejections.append(reason)
+        if len(_recent_rejections) > MAX_REJECTION_HISTORY:
+            _recent_rejections.pop(0)
 
         retries += 1
 

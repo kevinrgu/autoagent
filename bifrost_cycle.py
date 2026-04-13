@@ -13,8 +13,11 @@ No max_tokens -- let models respond at full length.
 import argparse
 import ast
 import json
+import os
 import re
+import subprocess
 import sys
+import tempfile
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -39,6 +42,7 @@ TIMEOUT = 360
 # Profile-level overrides (set by load_profile)
 ACTIVE_NUM_CTX = 8192
 ACTIVE_SYSTEM_RULES = ""
+ACTIVE_EVALUATOR_PROMPT_EXTRA = ""
 
 
 # ============================================================================
@@ -161,6 +165,26 @@ def extract_signatures(code: str) -> str:
     except SyntaxError:
         lines.append("  (could not parse file -- syntax error)")
     return "\n".join(lines)
+
+
+def syntax_check(code: str) -> tuple[bool, str]:
+    """Quick syntax check via py_compile. Returns (passed, error_message)."""
+    try:
+        fd, tmp_path = tempfile.mkstemp(suffix='.py')
+        try:
+            with os.fdopen(fd, 'w', encoding='utf-8') as f:
+                f.write(code)
+            result = subprocess.run(
+                [sys.executable, '-m', 'py_compile', tmp_path],
+                capture_output=True, text=True, timeout=10
+            )
+            if result.returncode != 0:
+                return False, result.stderr.strip()
+            return True, ""
+        finally:
+            os.unlink(tmp_path)
+    except Exception as e:
+        return True, ""  # on error, skip check rather than block
 
 
 # Rejection feedback buffer (persists across cycles within a run)
@@ -323,14 +347,33 @@ def run_cycle(cycle_num: int, objective: str, target_path: str,
             retries += 1
             continue
 
+        # Syntax pre-filter: catch basic errors before burning an evaluator call
+        syn_ok, syn_err = syntax_check(new_code)
+        if not syn_ok:
+            print(f"  [SyntaxCheck] FAIL: {syn_err[:200]}")
+            log_decision(decisions_path, cycle_num, proposal[:800],
+                         f"SYNTAX_ERROR: {syn_err[:400]}", False, len(new_code))
+            reason = f"SYNTAX_ERROR: {syn_err[:120]}"
+            _recent_rejections.append(reason)
+            if len(_recent_rejections) > MAX_REJECTION_HISTORY:
+                _recent_rejections.pop(0)
+            retries += 1
+            continue
+        print("  [SyntaxCheck] OK")
+
         print(f"\n  [Evaluator] {EVALUATOR_MODEL} @ Forge ... (Retry {retries + 1})")
         t0 = time.time()
+        eval_system = (
+            "You are a code quality evaluator. Reply PASS or FAIL on the FIRST LINE "
+            "followed by reasoning. PASS only if the change is correct and improves the code. "
+            "FAIL if it introduces breaking changes, wrong imports, or missing call-site updates."
+        )
+        if ACTIVE_EVALUATOR_PROMPT_EXTRA:
+            eval_system += "\n\n" + ACTIVE_EVALUATOR_PROMPT_EXTRA
         try:
             evaluation = call_llm(
                 EVALUATOR_URL, EVALUATOR_MODEL,
-                "You are a code quality evaluator. Reply PASS or FAIL on the FIRST LINE "
-                "followed by reasoning. PASS only if the change is correct and improves the code. "
-                "FAIL if it introduces breaking changes, wrong imports, or missing call-site updates.",
+                eval_system,
                 f"Objective: {objective}\n\n"
                 f"Original:\n```python\n{target_code[-4000:]}\n```\n\n"
                 f"Proposed:\n{proposal[:1000]}\n\n"
@@ -391,6 +434,7 @@ def load_profile(profile_name: str) -> dict | None:
     """Load a named profile from profiles.json and override global config."""
     global PROPOSER_URL, PROPOSER_MODEL, EXECUTOR_URL, EXECUTOR_MODEL
     global EVALUATOR_URL, EVALUATOR_MODEL, ACTIVE_NUM_CTX, ACTIVE_SYSTEM_RULES
+    global ACTIVE_EVALUATOR_PROMPT_EXTRA
 
     profiles_path = Path(__file__).parent / "profiles.json"
     if not profiles_path.exists():
@@ -416,6 +460,7 @@ def load_profile(profile_name: str) -> dict | None:
     EVALUATOR_URL = profile["evaluator"]["url"]
     ACTIVE_NUM_CTX = profile.get("num_ctx", 8192)
     ACTIVE_SYSTEM_RULES = profile.get("system_rules", "")
+    ACTIVE_EVALUATOR_PROMPT_EXTRA = profile.get("evaluator_prompt_extra", "")
 
     return profile
 

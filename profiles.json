@@ -4,9 +4,10 @@
       "description": "Code quality, correctness, structure improvements",
       "proposer": {"model": "mistral-small3.1:24b", "url": "http://192.168.2.33:11434/v1/chat/completions"},
       "executor": {"model": "bifrost-t1b", "url": "http://192.168.2.33:11434/v1/chat/completions"},
-      "evaluator": {"model": "qwen2.5-coder:14b", "url": "http://192.168.2.33:11434/v1/chat/completions"},
+      "evaluator": {"model": "bifrost-t2-gemma4", "url": "http://192.168.2.50:11434/v1/chat/completions"},
       "targets": ["D:\\Projects\\bifrost-router\\autopilot_graph.py", "D:\\Projects\\bifrost-router\\subtask_graph.py"],
       "system_rules": "CRITICAL CODE RULES: All LangGraph node functions are SYNC (def). Use _run_async() to call async functions. NEVER use raw await in sync def. Check function signatures to know which are async vs sync.",
+      "evaluator_prompt_extra": "Focus on correctness, not style. PASS if the change is functionally correct, passes syntax check, and doesn't break existing behavior — even if you'd write it differently. Reject only for actual bugs, missing imports, type errors, or logic regressions.",
       "num_ctx": 16384
     },
     "general": {

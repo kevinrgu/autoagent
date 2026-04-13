@@ -12,6 +12,7 @@ No max_tokens -- let models respond at full length.
 
 import argparse
 import ast
+import json
 import re
 import sys
 import time
@@ -35,12 +36,17 @@ EVALUATOR_MODEL = "bifrost-t2-gemma4"                  # Meta/US llama4:scout Q3
 
 TIMEOUT = 360
 
+# Profile-level overrides (set by load_profile)
+ACTIVE_NUM_CTX = 8192
+ACTIVE_SYSTEM_RULES = ""
+
 
 # ============================================================================
 # LLM CALL — DO NOT MODIFY (self-modification breaks all agents)
 # ============================================================================
 
-def call_llm(url: str, model: str, system: str, user: str) -> str:
+def call_llm(url: str, model: str, system: str, user: str,
+             num_ctx: int = 8192) -> str:
     """Call an Ollama endpoint. No max_tokens -- full-length response."""
     payload = {
         "model": model,
@@ -50,7 +56,7 @@ def call_llm(url: str, model: str, system: str, user: str) -> str:
         ],
         "stream": False,
         "temperature": 0.7,
-        "options": {"num_ctx": 8192},
+        "options": {"num_ctx": num_ctx},
     }
     r = httpx.post(url, json=payload, timeout=TIMEOUT)
     r.raise_for_status()
@@ -201,17 +207,25 @@ def propose(objective: str, target_path: str, target_code: str) -> str | None:
         items = "\n".join(f"  {i+1}. {r}" for i, r in enumerate(_recent_rejections))
         rejection_section = f"\n\nAVOID THESE PATTERNS (recently rejected):\n{items}"
 
+    # Use profile-specific rules if active, otherwise default coding rules
+    if ACTIVE_SYSTEM_RULES:
+        rules_block = f"PROFILE RULES:\n{ACTIVE_SYSTEM_RULES}"
+    else:
+        rules_block = (
+            "CRITICAL CODE RULES FOR THIS FILE:\n"
+            "- LangGraph node functions are SYNC (def, not async def)\n"
+            "- To call async functions from sync context, use: _run_async(async_coroutine)\n"
+            "- NEVER use raw 'await' in a sync def -- always wrap with _run_async()\n"
+            "- The _run_async() helper already exists in the file\n"
+            "- Check the function signatures below to know which functions are async vs sync"
+        )
+
     system_prompt = (
         "You are a senior Python developer. Suggest ONE small, safe improvement. "
         "Keep your response under 800 chars. Just state WHAT to change and WHY in 2-3 sentences, "
         "then show the improved code snippet. No markdown headers, no numbered lists, no verbose analysis. "
         "Do not suggest changes to call_llm or imports. No new dependencies. No signature changes.\n\n"
-        "CRITICAL CODE RULES FOR THIS FILE:\n"
-        "- LangGraph node functions are SYNC (def, not async def)\n"
-        "- To call async functions from sync context, use: _run_async(async_coroutine)\n"
-        "- NEVER use raw 'await' in a sync def -- always wrap with _run_async()\n"
-        "- The _run_async() helper already exists in the file\n"
-        "- Check the function signatures below to know which functions are async vs sync\n\n"
+        f"{rules_block}\n\n"
         f"FUNCTION SIGNATURES:\n{sig_summary}"
         f"{rejection_section}"
     )
@@ -222,6 +236,7 @@ def propose(objective: str, target_path: str, target_code: str) -> str | None:
             PROPOSER_URL, PROPOSER_MODEL,
             system_prompt,
             f"Objective: {objective}\n\nCode:\n```python\n{target_code[:5000]}{'...[TRUNCATED]' if len(target_code) > 5000 else ''}\n```\n\nSuggest one improvement:",
+            num_ctx=ACTIVE_NUM_CTX,
         )
     except Exception as e:
         print(f"  [Proposer] FAIL ({time.time()-t0:.0f}s): {e}")
@@ -239,6 +254,7 @@ def propose(objective: str, target_path: str, target_code: str) -> str | None:
             PROPOSER_URL, PROPOSER_MODEL,
             "You are a code expert. Be brief.",
             f"Suggest one small improvement to this Python code (not call_llm). NEVER use raw 'await' in sync def -- use _run_async() instead.\n```python\n{target_code[:5000]}{chr(10) + '...[TRUNCATED]' if len(target_code) > 5000 else ''}\n```",
+            num_ctx=ACTIVE_NUM_CTX,
         )
     except Exception as e:
         print(f"  [Proposer] Retry FAIL ({time.time()-t0:.0f}s): {e}")
@@ -277,6 +293,7 @@ def run_cycle(cycle_num: int, objective: str, target_path: str,
                 "You are a Python implementer. Output ONLY the modified function. "
                 "Start with def. No markdown fences, no explanations, no full file rewrites.",
                 f"Proposed change:\n{proposal[:1500]}\n\nCurrent code:\n```python\n{target_code[:6000]}{'...[TRUNCATED]' if len(target_code) > 6000 else ''}\n```\n\nOutput ONLY the modified function:",
+                num_ctx=ACTIVE_NUM_CTX,
             )
         except httpx.HTTPStatusError as e:
             error_message = f"HTTP error: {e.response.status_code} - {e.response.text}" if e.response else str(e)
@@ -319,6 +336,7 @@ def run_cycle(cycle_num: int, objective: str, target_path: str,
                 f"Proposed:\n{proposal[:1000]}\n\n"
                 f"New code:\n```python\n{new_code}\n```\n\n"
                 f"PASS or FAIL?",
+                num_ctx=ACTIVE_NUM_CTX,
             )
         except httpx.HTTPStatusError as e:
             error_message = f"HTTP error: {e.response.status_code} - {e.response.text}" if e.response else str(e)
@@ -369,6 +387,39 @@ def run_cycle(cycle_num: int, objective: str, target_path: str,
 
     log_decision(decisions_path, cycle_num, proposal[:800], "EXECUTOR/EVALUATOR FAIL after retries", False)
     return False
+def load_profile(profile_name: str) -> dict | None:
+    """Load a named profile from profiles.json and override global config."""
+    global PROPOSER_URL, PROPOSER_MODEL, EXECUTOR_URL, EXECUTOR_MODEL
+    global EVALUATOR_URL, EVALUATOR_MODEL, ACTIVE_NUM_CTX, ACTIVE_SYSTEM_RULES
+
+    profiles_path = Path(__file__).parent / "profiles.json"
+    if not profiles_path.exists():
+        print(f"  WARNING: profiles.json not found at {profiles_path}")
+        return None
+
+    with open(profiles_path, encoding="utf-8") as f:
+        data = json.load(f)
+
+    profiles = data.get("profiles", {})
+    if profile_name not in profiles:
+        print(f"  ERROR: profile '{profile_name}' not found. Available: {list(profiles.keys())}")
+        return None
+
+    profile = profiles[profile_name]
+
+    # Override global model/URL config
+    PROPOSER_MODEL = profile["proposer"]["model"]
+    PROPOSER_URL = profile["proposer"]["url"]
+    EXECUTOR_MODEL = profile["executor"]["model"]
+    EXECUTOR_URL = profile["executor"]["url"]
+    EVALUATOR_MODEL = profile["evaluator"]["model"]
+    EVALUATOR_URL = profile["evaluator"]["url"]
+    ACTIVE_NUM_CTX = profile.get("num_ctx", 8192)
+    ACTIVE_SYSTEM_RULES = profile.get("system_rules", "")
+
+    return profile
+
+
 def main():
     if sys.stdout.encoding != "utf-8":
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -377,24 +428,55 @@ def main():
     parser.add_argument("--program", default="program.md")
     parser.add_argument("--decisions", default="decisions.md")
     parser.add_argument("--max-cycles", type=int, default=5)
+    parser.add_argument("--profile", choices=["coding", "general", "research"],
+                        default=None, help="Named profile to load from profiles.json")
     args = parser.parse_args()
 
+    # --- Profile loading ---
+    profile = None
+    profile_name = args.profile
+
+    if not profile_name:
+        # Check active_profile.txt fallback
+        active_file = Path(__file__).parent / "active_profile.txt"
+        if active_file.exists():
+            candidate = active_file.read_text(encoding="utf-8").strip().lower()
+            if candidate in ("coding", "general", "research"):
+                profile_name = candidate
+
+    if profile_name:
+        profile = load_profile(profile_name)
+        if profile is None:
+            print(f"  WARNING: Failed to load profile '{profile_name}', using defaults")
+
+    # Determine target and decisions path
+    if profile:
+        target = profile["targets"][0]  # primary target
+        profile_upper = profile_name.upper()
+        decisions_path = str(Path(__file__).parent / "profiles" / profile_upper / f"decisions_{profile_name}.md")
+        objective = profile.get("system_rules", "Improve the code quality and robustness.")
+        num_ctx = profile.get("num_ctx", 8192)
+    else:
+        program = parse_program(args.program)
+        objective = program["objective"] or "Improve the code quality and robustness."
+        target = program["target"] or ""
+        decisions_path = args.decisions
+        num_ctx = 8192
+
     print("BIFROST Session O -- Local 3-Agent Cycle")
-    print(f"  Proposer:  {PROPOSER_MODEL} @ Bifrost :11434")
-    print(f"  Executor:  {EXECUTOR_MODEL} @ Bifrost :11434")
-    print(f"  Evaluator: {EVALUATOR_MODEL} @ Forge :11434")
-
-    program = parse_program(args.program)
-    objective = program["objective"] or "Improve the code quality and robustness."
-    target = program["target"] or ""
-
-    print(f"  Objective: {objective}")
+    if profile_name:
+        print(f"  Profile:   /{profile_name}")
+    print(f"  Proposer:  {PROPOSER_MODEL}")
+    print(f"  Executor:  {EXECUTOR_MODEL}")
+    print(f"  Evaluator: {EVALUATOR_MODEL}")
+    print(f"  Objective: {objective[:120]}")
     print(f"  Target:    {target or '(none)'}")
-    print(f"  Decisions: {args.decisions}")
+    print(f"  Decisions: {decisions_path}")
     print(f"  Cycles:    {args.max_cycles}")
+    print(f"  num_ctx:   {num_ctx}")
 
     if not target:
-        print("\nERROR: No target file in program.md")
+        print("\nERROR: No target file specified")
         return
 
     backup_target(target)
@@ -402,14 +484,14 @@ def main():
     accepted_count = 0
     for cycle in range(1, args.max_cycles + 1):
         try:
-            ok = run_cycle(cycle, objective, target, args.decisions)
+            ok = run_cycle(cycle, objective, target, decisions_path)
             if ok:
                 accepted_count += 1
         except Exception as e:
             print(f"\n  CYCLE {cycle} EXCEPTION: {e}")
-            log_decision(args.decisions, cycle, f"EXCEPTION: {e}", "", False)
+            log_decision(decisions_path, cycle, f"EXCEPTION: {e}", "", False)
 
-    log_run_summary(args.decisions, accepted_count, args.max_cycles)
+    log_run_summary(decisions_path, accepted_count, args.max_cycles)
 
     print(f"\n{'='*60}")
     print(f"  SESSION COMPLETE: {accepted_count}/{args.max_cycles} accepted")

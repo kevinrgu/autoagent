@@ -1,0 +1,242 @@
+[
+  {
+    "name": "mistral-small3.1:24b",
+    "node": "Bifrost",
+    "url": "http://127.0.0.1:11434",
+    "available": true,
+    "avg_tok_s": 6.3,
+    "runs": [
+      {
+        "tokens": 460,
+        "elapsed_s": 73.01,
+        "tok_s": 6.3
+      },
+      {
+        "tokens": 528,
+        "elapsed_s": 84.17,
+        "tok_s": 6.3
+      },
+      {
+        "tokens": 454,
+        "elapsed_s": 72.03,
+        "tok_s": 6.3
+      }
+    ]
+  },
+  {
+    "name": "bifrost-t1b:latest",
+    "node": "Bifrost",
+    "url": "http://127.0.0.1:11434",
+    "available": true,
+    "avg_tok_s": 48.2,
+    "runs": [
+      {
+        "tokens": 2190,
+        "elapsed_s": 45.45,
+        "tok_s": 48.2
+      },
+      {
+        "tokens": 1845,
+        "elapsed_s": 37.97,
+        "tok_s": 48.6
+      },
+      {
+        "tokens": 1783,
+        "elapsed_s": 37.29,
+        "tok_s": 47.8
+      }
+    ]
+  },
+  {
+    "name": "qwen2.5-coder:14b",
+    "node": "Bifrost",
+    "url": "http://127.0.0.1:11434",
+    "available": true,
+    "avg_tok_s": 5.9,
+    "runs": [
+      {
+        "tokens": 566,
+        "elapsed_s": 99.76,
+        "tok_s": 5.7
+      },
+      {
+        "tokens": 548,
+        "elapsed_s": 93.73,
+        "tok_s": 5.8
+      },
+      {
+        "tokens": 494,
+        "elapsed_s": 81.11,
+        "tok_s": 6.1
+      }
+    ]
+  },
+  {
+    "name": "qwen3:14b",
+    "node": "Bifrost",
+    "url": "http://127.0.0.1:11434",
+    "available": false,
+    "avg_tok_s": 0.0,
+    "runs": []
+  },
+  {
+    "name": "gemma4:e4b",
+    "node": "Bifrost",
+    "url": "http://127.0.0.1:11434",
+    "available": true,
+    "avg_tok_s": 72.9,
+    "runs": [
+      {
+        "tokens": 1874,
+        "elapsed_s": 25.44,
+        "tok_s": 73.7
+      },
+      {
+        "tokens": 2154,
+        "elapsed_s": 29.82,
+        "tok_s": 72.2
+      },
+      {
+        "tokens": 2045,
+        "elapsed_s": 28.06,
+        "tok_s": 72.9
+      }
+    ]
+  },
+  {
+    "name": "bifrost-t2-gemma4:latest",
+    "node": "Forge",
+    "url": "http://192.168.2.50:11434",
+    "available": true,
+    "avg_tok_s": 47.2,
+    "runs": [
+      {
+        "tokens": 1759,
+        "elapsed_s": 37.2,
+        "tok_s": 47.3
+      },
+      {
+        "tokens": 1777,
+        "elapsed_s": 37.59,
+        "tok_s": 47.3
+      },
+      {
+        "tokens": 1413,
+        "elapsed_s": 29.98,
+        "tok_s": 47.1
+      }
+    ]
+  },
+  {
+    "name": "gemma4:e4b",
+    "node": "Forge",
+    "url": "http://192.168.2.50:11434",
+    "available": true,
+    "avg_tok_s": 50.8,
+    "runs": [
+      {
+        "tokens": 1888,
+        "elapsed_s": 37.32,
+        "tok_s": 50.6
+      },
+      {
+        "tokens": 2198,
+        "elapsed_s": 43.18,
+        "tok_s": 50.9
+      },
+      {
+        "tokens": 2272,
+        "elapsed_s": 44.54,
+        "tok_s": 51.0
+      }
+    ]
+  },
+  {
+    "name": "llama4:scout",
+    "node": "Forge",
+    "url": "http://192.168.2.50:11434",
+    "available": false,
+    "avg_tok_s": 0.0,
+    "runs": []
+  },
+  {
+    "name": "gemma4:e4b",
+    "node": "Hearth",
+    "url": "http://192.168.2.4:11434",
+    "available": true,
+    "avg_tok_s": 22.2,
+    "runs": [
+      {
+        "tokens": 382,
+        "elapsed_s": 17.27,
+        "tok_s": 22.1
+      },
+      {
+        "tokens": 903,
+        "elapsed_s": 40.59,
+        "tok_s": 22.2
+      },
+      {
+        "tokens": 666,
+        "elapsed_s": 29.86,
+        "tok_s": 22.3
+      }
+    ]
+  },
+  {
+    "name": "qwen2.5-coder:7b",
+    "node": "Hearth",
+    "url": "http://192.168.2.4:11434",
+    "available": true,
+    "avg_tok_s": 20.5,
+    "runs": [
+      {
+        "tokens": 338,
+        "elapsed_s": 16.59,
+        "tok_s": 20.4
+      },
+      {
+        "tokens": 390,
+        "elapsed_s": 19.05,
+        "tok_s": 20.5
+      },
+      {
+        "tokens": 504,
+        "elapsed_s": 24.27,
+        "tok_s": 20.8
+      }
+    ]
+  },
+  {
+    "name": "qwen3:8b",
+    "node": "Hearth",
+    "url": "http://192.168.2.4:11434",
+    "available": false,
+    "avg_tok_s": 0.0,
+    "runs": []
+  },
+  {
+    "name": "mistral:7b",
+    "node": "Hearth",
+    "url": "http://192.168.2.4:11434",
+    "available": true,
+    "avg_tok_s": 14.8,
+    "runs": [
+      {
+        "tokens": 455,
+        "elapsed_s": 30.73,
+        "tok_s": 14.8
+      },
+      {
+        "tokens": 317,
+        "elapsed_s": 21.44,
+        "tok_s": 14.8
+      },
+      {
+        "tokens": 416,
+        "elapsed_s": 28.2,
+        "tok_s": 14.8
+      }
+    ]
+  }
+]

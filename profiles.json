@@ -1,0 +1,33 @@
+{
+  "profiles": {
+    "coding": {
+      "description": "Code quality, correctness, structure improvements",
+      "proposer": {"model": "mistral-small3.1:24b", "url": "http://192.168.2.33:11434/v1/chat/completions"},
+      "executor": {"model": "bifrost-t1b", "url": "http://192.168.2.33:11434/v1/chat/completions"},
+      "evaluator": {"model": "qwen2.5-coder:14b", "url": "http://192.168.2.33:11434/v1/chat/completions"},
+      "targets": ["D:\\Projects\\bifrost-router\\autopilot_graph.py", "D:\\Projects\\bifrost-router\\subtask_graph.py"],
+      "system_rules": "CRITICAL CODE RULES: All LangGraph node functions are SYNC (def). Use _run_async() to call async functions. NEVER use raw await in sync def. Check function signatures to know which are async vs sync.",
+      "num_ctx": 16384
+    },
+    "general": {
+      "description": "RFP and prose output quality improvements",
+      "proposer": {"model": "mistral-small3.1:24b", "url": "http://192.168.2.33:11434/v1/chat/completions"},
+      "executor": {"model": "bifrost-t1b", "url": "http://192.168.2.33:11434/v1/chat/completions"},
+      "evaluator": {"model": "bifrost-t2-gemma4", "url": "http://192.168.2.50:11434/v1/chat/completions"},
+      "targets": ["D:\\Projects\\bifrost-router\\autopilot_graph.py"],
+      "focus_functions": ["_is_rfp_task", "_build_rfp_dag"],
+      "system_rules": "Focus on RFP output quality: section completeness, prose clarity, requirement coverage. Evaluate whether changes improve the quality of generated RFP responses.",
+      "num_ctx": 16384
+    },
+    "research": {
+      "description": "Long-context synthesis, research pipeline improvements",
+      "proposer": {"model": "mistral-small3.1:24b", "url": "http://192.168.2.33:11434/v1/chat/completions"},
+      "executor": {"model": "bifrost-t1b", "url": "http://192.168.2.33:11434/v1/chat/completions"},
+      "evaluator": {"model": "bifrost-t2-gemma4", "url": "http://192.168.2.50:11434/v1/chat/completions"},
+      "targets": ["D:\\Projects\\bifrost-router\\subtask_graph.py"],
+      "system_rules": "Focus on research pipeline quality: long-context handling, source synthesis, citation accuracy. Evaluate whether changes improve research output depth and correctness.",
+      "num_ctx": 16384
+    }
+  },
+  "active": "coding"
+}

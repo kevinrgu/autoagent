@@ -43,6 +43,7 @@ TIMEOUT = 360
 ACTIVE_NUM_CTX = 8192
 ACTIVE_SYSTEM_RULES = ""
 ACTIVE_EVALUATOR_PROMPT_EXTRA = ""
+ACTIVE_TEMPERATURE = 0.7
 
 
 # ============================================================================
@@ -50,7 +51,7 @@ ACTIVE_EVALUATOR_PROMPT_EXTRA = ""
 # ============================================================================
 
 def call_llm(url: str, model: str, system: str, user: str,
-             num_ctx: int = 8192) -> str:
+             num_ctx: int = 8192, temperature: float | None = None) -> str:
     """Call an Ollama endpoint. No max_tokens -- full-length response."""
     payload = {
         "model": model,
@@ -59,7 +60,7 @@ def call_llm(url: str, model: str, system: str, user: str,
             {"role": "user", "content": user},
         ],
         "stream": False,
-        "temperature": 0.7,
+        "temperature": temperature if temperature is not None else ACTIVE_TEMPERATURE,
         "options": {"num_ctx": num_ctx},
     }
     r = httpx.post(url, json=payload, timeout=TIMEOUT)
@@ -80,7 +81,50 @@ def strip_fences(text: str) -> str:
     text = text.strip()
     text = re.sub(r"^```(?:python|py)?\s*\n?", "", text)
     text = re.sub(r"\n?```\s*$", "", text)
-    return text.strip()
+    text = text.strip()
+    # Strip prose before first 'def ' or 'async def ' line
+    match = re.search(r"^(async\s+)?def\s+", text, re.MULTILINE)
+    if match and match.start() > 0:
+        text = text[match.start():]
+    return text
+
+
+def apply_diff(original: str, diff_text: str) -> str | None:
+    """Parse SEARCH/REPLACE blocks and apply them to original code.
+
+    Returns patched code, or None if no SEARCH/REPLACE blocks found
+    (signals caller to fall back to legacy behavior).
+    """
+    pattern = re.compile(
+        r"<<<SEARCH\s*\n(.*?)>>>REPLACE\s*\n(.*?)<<<END",
+        re.DOTALL,
+    )
+    blocks = pattern.findall(diff_text)
+    if not blocks:
+        return None  # no diff blocks → fall back to smart_apply
+
+    patched = original
+    for search_text, replace_text in blocks:
+        search_text = search_text.rstrip("\n")
+        replace_text = replace_text.rstrip("\n")
+
+        if not search_text.strip():
+            continue
+
+        if search_text not in patched:
+            search_norm = "\n".join(l.rstrip() for l in search_text.split("\n"))
+            patched_norm = "\n".join(l.rstrip() for l in patched.split("\n"))
+            if search_norm in patched_norm:
+                patched = patched_norm.replace(search_norm, replace_text, 1)
+            else:
+                print(f"  [apply_diff] WARNING: search block not found ({len(search_text)} chars), skipping")
+                continue
+        else:
+            patched = patched.replace(search_text, replace_text, 1)
+
+    if patched == original:
+        return None
+    return patched
 
 
 def smart_apply(target_path: str, original: str, new_code: str) -> str:
@@ -248,7 +292,8 @@ def propose(objective: str, target_path: str, target_code: str) -> str | None:
         "You are a senior Python developer. Suggest ONE small, safe improvement. "
         "Keep your response under 800 chars. Just state WHAT to change and WHY in 2-3 sentences, "
         "then show the improved code snippet. No markdown headers, no numbered lists, no verbose analysis. "
-        "Do not suggest changes to call_llm or imports. No new dependencies. No signature changes.\n\n"
+        "Do not suggest changes to call_llm or imports. No new dependencies. No signature changes. "
+        "Pick a DIFFERENT function each time — do not repeat the same suggestion pattern.\n\n"
         f"{rules_block}\n\n"
         f"FUNCTION SIGNATURES:\n{sig_summary}"
         f"{rejection_section}"
@@ -259,7 +304,7 @@ def propose(objective: str, target_path: str, target_code: str) -> str | None:
         proposal = call_llm(
             PROPOSER_URL, PROPOSER_MODEL,
             system_prompt,
-            f"Objective: {objective}\n\nCode:\n```python\n{target_code[:5000]}{'...[TRUNCATED]' if len(target_code) > 5000 else ''}\n```\n\nSuggest one improvement:",
+            f"Objective: {objective}\n\nCode:\n```python\n{target_code[:10000]}{'...[TRUNCATED]' if len(target_code) > 10000 else ''}\n```\n\nSuggest one improvement:",
             num_ctx=ACTIVE_NUM_CTX,
         )
     except Exception as e:
@@ -315,8 +360,9 @@ def run_cycle(cycle_num: int, objective: str, target_path: str,
             new_code = call_llm(
                 EXECUTOR_URL, EXECUTOR_MODEL,
                 "You are a Python implementer. Output ONLY the modified function. "
-                "Start with def. No markdown fences, no explanations, no full file rewrites.",
-                f"Proposed change:\n{proposal[:1500]}\n\nCurrent code:\n```python\n{target_code[:6000]}{'...[TRUNCATED]' if len(target_code) > 6000 else ''}\n```\n\nOutput ONLY the modified function:",
+                "Start with def or async def. No markdown fences, no explanations, no full file rewrites. "
+                "No prose before or after the code. Just the function.",
+                f"Proposed change:\n{proposal[:1500]}\n\nCurrent code:\n```python\n{target_code[:10000]}{'...[TRUNCATED]' if len(target_code) > 10000 else ''}\n```\n\nOutput ONLY the modified function:",
                 num_ctx=ACTIVE_NUM_CTX,
             )
         except httpx.HTTPStatusError as e:
@@ -342,13 +388,23 @@ def run_cycle(cycle_num: int, objective: str, target_path: str,
         new_code = strip_fences(new_code)
         print(f"  [Executor] {len(new_code)} chars ({time.time()-t0:.0f}s)")
 
-        if len(new_code) < 100:
+        if len(new_code) < 50:
             print("  [Executor] Output too short")
             retries += 1
             continue
 
+        # Try to apply as diff first; if it's a diff, syntax-check the patched result
+        diff_result = apply_diff(target_code, new_code)
+        is_diff_mode = diff_result is not None
+
+        if is_diff_mode:
+            print("  [DiffMode] SEARCH/REPLACE blocks detected")
+            code_to_check = diff_result
+        else:
+            code_to_check = new_code
+
         # Syntax pre-filter: catch basic errors before burning an evaluator call
-        syn_ok, syn_err = syntax_check(new_code)
+        syn_ok, syn_err = syntax_check(code_to_check)
         if not syn_ok:
             print(f"  [SyntaxCheck] FAIL: {syn_err[:200]}")
             log_decision(decisions_path, cycle_num, proposal[:800],
@@ -375,9 +431,9 @@ def run_cycle(cycle_num: int, objective: str, target_path: str,
                 EVALUATOR_URL, EVALUATOR_MODEL,
                 eval_system,
                 f"Objective: {objective}\n\n"
-                f"Original:\n```python\n{target_code[-4000:]}\n```\n\n"
+                f"Original:\n```python\n{target_code[:12000]}\n```\n\n"
                 f"Proposed:\n{proposal[:1000]}\n\n"
-                f"New code:\n```python\n{new_code}\n```\n\n"
+                f"New code:\n```python\n{new_code[:4000]}\n```\n\n"
                 f"PASS or FAIL?",
                 num_ctx=ACTIVE_NUM_CTX,
             )
@@ -412,7 +468,13 @@ def run_cycle(cycle_num: int, objective: str, target_path: str,
 
         if accepted:
             try:
-                apply_result = smart_apply(target_path, target_code, new_code)
+                if is_diff_mode:
+                    # Already syntax-checked above; write the patched code
+                    with open(target_path, 'w', encoding='utf-8') as f:
+                        f.write(diff_result)
+                    apply_result = "Applied via SEARCH/REPLACE diff"
+                else:
+                    apply_result = smart_apply(target_path, target_code, new_code)
                 print(f"  [Apply] {apply_result}")
                 return True
             except Exception as e:
@@ -420,8 +482,9 @@ def run_cycle(cycle_num: int, objective: str, target_path: str,
                 retries += 1
                 continue
 
-        # Track rejection reason for feedback loop
-        reason = evaluation.strip().split("\n")[0][:120]
+        # Track rejection reason for feedback loop (include reasoning, not just FAIL)
+        eval_lines = evaluation.strip().split("\n")
+        reason = " ".join(line.strip() for line in eval_lines[:3])[:200]
         _recent_rejections.append(reason)
         if len(_recent_rejections) > MAX_REJECTION_HISTORY:
             _recent_rejections.pop(0)
@@ -434,7 +497,7 @@ def load_profile(profile_name: str) -> dict | None:
     """Load a named profile from profiles.json and override global config."""
     global PROPOSER_URL, PROPOSER_MODEL, EXECUTOR_URL, EXECUTOR_MODEL
     global EVALUATOR_URL, EVALUATOR_MODEL, ACTIVE_NUM_CTX, ACTIVE_SYSTEM_RULES
-    global ACTIVE_EVALUATOR_PROMPT_EXTRA
+    global ACTIVE_EVALUATOR_PROMPT_EXTRA, ACTIVE_TEMPERATURE
 
     profiles_path = Path(__file__).parent / "profiles.json"
     if not profiles_path.exists():
@@ -461,6 +524,7 @@ def load_profile(profile_name: str) -> dict | None:
     ACTIVE_NUM_CTX = profile.get("num_ctx", 8192)
     ACTIVE_SYSTEM_RULES = profile.get("system_rules", "")
     ACTIVE_EVALUATOR_PROMPT_EXTRA = profile.get("evaluator_prompt_extra", "")
+    ACTIVE_TEMPERATURE = profile.get("temperature", 0.7)
 
     return profile
 
@@ -499,7 +563,7 @@ def main():
         target = profile["targets"][0]  # primary target
         profile_upper = profile_name.upper()
         decisions_path = str(Path(__file__).parent / "profiles" / profile_upper / f"decisions_{profile_name}.md")
-        objective = profile.get("system_rules", "Improve the code quality and robustness.")
+        objective = profile.get("objective", "Improve the code quality and robustness.")
         num_ctx = profile.get("num_ctx", 8192)
     else:
         program = parse_program(args.program)

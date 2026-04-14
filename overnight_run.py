@@ -15,6 +15,7 @@ import time
 from datetime import datetime
 from pathlib import Path
 
+import httpx
 import pk_sync
 
 PROFILES = ["coding", "general", "research"]
@@ -23,6 +24,43 @@ TIMEOUT_SECONDS = 3600  # 1 hour per profile
 
 SCRIPT_DIR = Path(__file__).parent
 CYCLE_SCRIPT = SCRIPT_DIR / "bifrost_cycle.py"
+PROFILES_JSON = SCRIPT_DIR / "profiles.json"
+COOLDOWN_SECONDS = 30
+
+
+def warmup_endpoints(profile_name: str):
+    """Ping proposer/executor/evaluator to ensure models are loaded before run."""
+    import json
+    try:
+        data = json.loads(PROFILES_JSON.read_text(encoding="utf-8"))
+        profile_config = data.get("profiles", {}).get(profile_name, {})
+    except Exception as e:
+        print(f"  warmup: could not read profiles.json: {e}")
+        return
+
+    for role in ["proposer", "executor", "evaluator"]:
+        cfg = profile_config.get(role, {})
+        url = cfg.get("url", "")
+        model = cfg.get("model", "")
+        if url and model:
+            try:
+                resp = httpx.post(
+                    url,
+                    json={"model": model, "messages": [{"role": "user", "content": "ping"}], "max_tokens": 5},
+                    timeout=120,
+                )
+                print(f"  warmup {role} ({model}): {resp.status_code}")
+            except Exception as e:
+                print(f"  warmup {role} ({model}): FAILED - {e}")
+
+
+def write_run_header(profile_name: str):
+    """Append a timestamped run header to the profile's decisions file."""
+    profile_upper = profile_name.upper()
+    decisions_file = SCRIPT_DIR / "profiles" / profile_upper / f"decisions_{profile_name}.md"
+    decisions_file.parent.mkdir(parents=True, exist_ok=True)
+    with open(decisions_file, "a", encoding="utf-8") as f:
+        f.write(f"\n\n# === Overnight Run {datetime.now().isoformat()} ===\n")
 
 
 def run_profile(profile: str, cycles: int, timeout: int) -> dict:
@@ -89,12 +127,24 @@ def main():
     print(f"  Started: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 
     results = []
-    for profile in PROFILES:
+    for i, profile in enumerate(PROFILES):
+        # Warmup endpoints before each profile
+        print(f"\n--- Warming up endpoints for {profile} ---")
+        warmup_endpoints(profile)
+
+        # Write run header to decisions file
+        write_run_header(profile)
+
         result = run_profile(profile, args.cycles_per_profile, args.timeout)
         results.append(result)
         print(f"\n  >> {profile}: rc={result['returncode']} "
               f"elapsed={result['elapsed_s']}s "
               f"{'TIMEOUT' if result['timed_out'] else 'OK'}")
+
+        # Cooldown between profiles to let Ollama unload/swap models
+        if i < len(PROFILES) - 1:
+            print(f"\n  Cooldown {COOLDOWN_SECONDS}s before next profile...")
+            time.sleep(COOLDOWN_SECONDS)
 
     # Sync reports to pk-upload
     print("\n\n--- pk_sync ---")

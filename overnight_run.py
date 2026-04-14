@@ -235,6 +235,60 @@ def main():
     except Exception as e:
         print(f"  pk_sync failed: {e}")
 
+    # Auto-commit accepted changes
+    log_lines = []
+    BIFROST_ROUTER = r"D:\Projects\bifrost-router"
+    AUTOAGENT = str(SCRIPT_DIR)
+    try:
+        targets = [
+            r"D:\Projects\bifrost-router\autopilot_graph.py",
+            r"D:\Projects\bifrost-router\subtask_graph.py",
+        ]
+        for t in targets:
+            subprocess.run(["git", "-C", str(Path(t).parent), "add", str(t)],
+                           capture_output=True)
+
+        subprocess.run(["git", "add", "-A"], capture_output=True, cwd=AUTOAGENT)
+
+        commit_ts = datetime.now().strftime("%Y-%m-%d %H:%M")
+
+        # Commit bifrost-router if targets changed
+        rc = subprocess.run(["git", "diff", "--cached", "--quiet"],
+                            capture_output=True, cwd=BIFROST_ROUTER)
+        if rc.returncode != 0:
+            subprocess.run(
+                ["git", "commit", "-m",
+                 f"overnight training {commit_ts}: auto-committed accepted changes"],
+                capture_output=True, cwd=BIFROST_ROUTER)
+            log_lines.append("git commit: bifrost-router (accepted target changes)")
+
+        # Commit autoagent (decisions + logs)
+        rc2 = subprocess.run(["git", "diff", "--cached", "--quiet"],
+                             capture_output=True, cwd=AUTOAGENT)
+        if rc2.returncode != 0:
+            subprocess.run(
+                ["git", "commit", "-m",
+                 f"overnight training {commit_ts}: decisions + logs"],
+                capture_output=True, cwd=AUTOAGENT)
+            log_lines.append("git commit: autoagent (decisions + logs)")
+    except Exception as e:
+        log_lines.append(f"git auto-commit failed: {e}")
+
+    if log_lines:
+        print("\n--- git auto-commit ---")
+        for line in log_lines:
+            print(f"  {line}")
+
+    # Write overnight log
+    log_file = SCRIPT_DIR / "overnight_log.txt"
+    with open(log_file, "a", encoding="utf-8") as f:
+        f.write(f"\n# Run {run_stamp} — {datetime.now().isoformat()}\n")
+        for r in results:
+            status = "TIMEOUT" if r["timed_out"] else ("OK" if r["returncode"] == 0 else "FAIL")
+            f.write(f"  {r['profile']:10s} {status:7s} {r['elapsed_s']:8.1f}s\n")
+        for line in log_lines:
+            f.write(f"  {line}\n")
+
     # Summary
     print(f"\n{'='*60}")
     print("  OVERNIGHT RUN COMPLETE")

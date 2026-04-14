@@ -12,6 +12,7 @@ No max_tokens -- let models respond at full length.
 
 import argparse
 import ast
+import hashlib
 import json
 import os
 import re
@@ -211,6 +212,41 @@ def extract_signatures(code: str) -> str:
     return "\n".join(lines)
 
 
+def pick_target_function(code: str, max_lines: int = 80) -> str | None:
+    """Pick a random function ≤max_lines from code. Returns function source or None."""
+    import random
+    code_lines = code.split("\n")
+    try:
+        tree = ast.parse(code)
+    except SyntaxError:
+        return None
+
+    candidates = []
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            if node.name == "call_llm":
+                continue
+            start = node.lineno - 1
+            end = node.end_lineno if hasattr(node, 'end_lineno') and node.end_lineno else start + 1
+            fn_lines = end - start
+            candidates.append((node.name, start, end, fn_lines))
+
+    if not candidates:
+        return None
+
+    # Prefer functions ≤max_lines; if all exceed, pick the smallest
+    small = [c for c in candidates if c[3] <= max_lines]
+    if small:
+        pick = random.choice(small)
+    else:
+        pick = min(candidates, key=lambda c: c[3])
+
+    name, start, end, fn_lines = pick
+    fn_code = "\n".join(code_lines[start:end])
+    print(f"  [TargetFn] {name} ({fn_lines} lines, line {start+1}-{end})")
+    return fn_code
+
+
 def syntax_check(code: str) -> tuple[bool, str]:
     """Quick syntax check via py_compile. Returns (passed, error_message)."""
     try:
@@ -234,6 +270,9 @@ def syntax_check(code: str) -> tuple[bool, str]:
 # Rejection feedback buffer (persists across cycles within a run)
 _recent_rejections: list[str] = []
 MAX_REJECTION_HISTORY = 3
+
+# Proposal dedup (persists across cycles within a run)
+_seen_proposal_hashes: set[str] = set()
 
 
 def parse_program(path: str) -> dict:
@@ -269,6 +308,12 @@ def propose(objective: str, target_path: str, target_code: str) -> str | None:
     # Build signature summary for proposer context
     sig_summary = extract_signatures(target_code)
 
+    # Pick a focused target function (≤80 lines preferred)
+    focused_fn = pick_target_function(target_code)
+    focus_section = ""
+    if focused_fn:
+        focus_section = f"\n\nSUGGESTED TARGET FUNCTION (improve THIS one):\n```python\n{focused_fn}\n```"
+
     # Build rejection feedback section
     rejection_section = ""
     if _recent_rejections:
@@ -296,6 +341,7 @@ def propose(objective: str, target_path: str, target_code: str) -> str | None:
         "Pick a DIFFERENT function each time — do not repeat the same suggestion pattern.\n\n"
         f"{rules_block}\n\n"
         f"FUNCTION SIGNATURES:\n{sig_summary}"
+        f"{focus_section}"
         f"{rejection_section}"
     )
 
@@ -349,6 +395,14 @@ def run_cycle(cycle_num: int, objective: str, target_path: str,
     if not proposal:
         log_decision(decisions_path, cycle_num, "PROPOSER_FAIL", "", False)
         return False
+
+    # Proposal deduplication
+    proposal_hash = hashlib.sha256(proposal[:500].encode()).hexdigest()[:16]
+    if proposal_hash in _seen_proposal_hashes:
+        print(f"  [Dedup] DUPLICATE proposal (hash={proposal_hash}), skipping cycle")
+        log_decision(decisions_path, cycle_num, proposal[:800], "DUPLICATE: same proposal seen earlier in run", False)
+        return False
+    _seen_proposal_hashes.add(proposal_hash)
 
     MAX_RETRIES = 3
     retries = 0
@@ -457,6 +511,30 @@ def run_cycle(cycle_num: int, objective: str, target_path: str,
             retries += 1
             continue
 
+        # Empty evaluator retry: if 0 chars, sleep 5s and retry same payload once
+        if not evaluation or len(evaluation.strip()) == 0:
+            print(f"  [Evaluator] 0 chars ({time.time()-t0:.0f}s), retrying after 5s...")
+            time.sleep(5)
+            try:
+                evaluation = call_llm(
+                    EVALUATOR_URL, EVALUATOR_MODEL,
+                    eval_system,
+                    f"Objective: {objective}\n\n"
+                    f"Original:\n```python\n{target_code[:12000]}\n```\n\n"
+                    f"Proposed:\n{proposal[:1000]}\n\n"
+                    f"New code:\n```python\n{new_code[:4000]}\n```\n\n"
+                    f"PASS or FAIL?",
+                    num_ctx=ACTIVE_NUM_CTX,
+                )
+            except Exception:
+                evaluation = ""
+            if not evaluation or len(evaluation.strip()) == 0:
+                print("  [Evaluator] Still empty after retry")
+                log_decision(decisions_path, cycle_num, proposal[:800],
+                             "FAIL: Evaluator returned empty response twice", False, len(new_code))
+                retries += 1
+                continue
+
         print(f"  [Evaluator] {len(evaluation)} chars ({time.time()-t0:.0f}s)")
         print(f"  Response: {evaluation}")
 
@@ -469,13 +547,29 @@ def run_cycle(cycle_num: int, objective: str, target_path: str,
         if accepted:
             try:
                 if is_diff_mode:
-                    # Already syntax-checked above; write the patched code
                     with open(target_path, 'w', encoding='utf-8') as f:
                         f.write(diff_result)
                     apply_result = "Applied via SEARCH/REPLACE diff"
                 else:
                     apply_result = smart_apply(target_path, target_code, new_code)
                 print(f"  [Apply] {apply_result}")
+
+                # Rollback guard: verify target file still compiles
+                written_code = read_file(target_path)
+                post_ok, post_err = syntax_check(written_code)
+                if not post_ok:
+                    bak_path = Path(target_path).with_suffix(".py.bak")
+                    if bak_path.exists():
+                        bak_path.replace(target_path)
+                    else:
+                        with open(target_path, 'w', encoding='utf-8') as f:
+                            f.write(target_code)
+                    print(f"  [ROLLBACK] accepted change broke syntax: {post_err[:200]}")
+                    log_decision(decisions_path, cycle_num, proposal[:800],
+                                 f"ROLLBACK: {post_err[:400]}", False, len(new_code))
+                    retries += 1
+                    continue
+
                 return True
             except Exception as e:
                 print(f"  [Apply] FAIL: {str(e)}")
@@ -562,7 +656,11 @@ def main():
     if profile:
         target = profile["targets"][0]  # primary target
         profile_upper = profile_name.upper()
-        decisions_path = str(Path(__file__).parent / "profiles" / profile_upper / f"decisions_{profile_name}.md")
+        # Use --decisions if explicitly passed, otherwise default to profile dir
+        if args.decisions != "decisions.md":
+            decisions_path = args.decisions
+        else:
+            decisions_path = str(Path(__file__).parent / "profiles" / profile_upper / f"decisions_{profile_name}.md")
         objective = profile.get("objective", "Improve the code quality and robustness.")
         num_ctx = profile.get("num_ctx", 8192)
     else:

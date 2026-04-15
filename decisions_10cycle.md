@@ -1763,3 +1763,142 @@ while max_attempts > 0:
 
 ## Run Summary -- 2026-04-13 16:03 UTC
 Accepted: 9/10 | Models: mistral-small3.1:24b -> bifrost-t1b -> bifrost-t2-gemma4
+
+## Cycle 9 -- 2026-04-13 16:04:03 UTC
+**Proposal:** Use a context manager for semaphore acquisition to ensure it is released even if an exception occurs. This improves resource management.
+
+```python
+    with _run_async(asyncio.shield(acquire_semaphore(sem, max_retries=max_retries - attempt))) as acquired:
+        if not acquired:
+            # handle failure as before
+        else:
+            _thread_local.retry_delay = 1
+            try:
+                for attempt in range(max_retries):
+                    try:
+                        log.debug(f"Subtask {spec.subtask_id} acquired tier={spec.assigned_tier} semaphore")
+                        return _run_async(run_subtask(spec))
+                    except Exception as e:
+                        # handle exception as before
+```
+
+**Executor output:** 5137 chars
+
+**Evaluator:** FAIL
+The proposed code contains several critical issues that will prevent it from running:
+
+1.  **Indentation Errors**: There are multiple `IndentationError` syntax errors. Specifically, the line `_thread_local.retry_delay *= 2` is misaligned with the line above it, and the `result = SubtaskResult(...)` block within the `else` clause is also incorrectly indented.
+2.
+3.  **Variable Shadowing**: The variable `attempt` is used in the outer `while` loop to track semaphore acquisition attempts, but it is then redefined in the inner `for attempt in range(max_retries)` loop. This shadowing can lead to unpredictable behavior in the outer loop's logic (such as the `attempt += 1` increment).
+4.  **Resource Leak Risk**: While the code uses a context manager, the `acquire_semaphore` function provided 
+
+**Accepted:** NO
+
+## Cycle 9 -- 2026-04-13 16:04:03 UTC
+**Proposal:** Use a context manager for semaphore acquisition to ensure it is released even if an exception occurs. This improves resource management.
+
+```python
+    with _run_async(asyncio.shield(acquire_semaphore(sem, max_retries=max_retries - attempt))) as acquired:
+        if not acquired:
+            # handle failure as before
+        else:
+            _thread_local.retry_delay = 1
+            try:
+                for attempt in range(max_retries):
+                    try:
+                        log.debug(f"Subtask {spec.subtask_id} acquired tier={spec.assigned_tier} semaphore")
+                        return _run_async(run_subtask(spec))
+                    except Exception as e:
+                        # handle exception as before
+```
+
+**Executor output:** 0 chars
+
+**Evaluator:** EXECUTOR/EVALUATOR FAIL after retries
+
+**Accepted:** NO
+
+## Cycle 10 -- 2026-04-13 16:06:07 UTC
+**Proposal:** Change the `if attempt < max_retries - 1` check to `if attempt < max_retries - 1 and consecutive_failures < circuit_breaker_threshold`. This ensures that retries only occur if the circuit breaker threshold has not been hit, improving reliability and preventing unnecessary retries.
+
+```python
+        except Exception as e:
+            log.error(f"Exception running subtask {spec.subtask_id} (tier={spec.assigned_tier}) on attempt {attempt + 1}: {type(e).__name__} - {e}", exc_info=True)
+            log.debug(f"Subtask {spec.subtask_id} (tier={spec.assigned_tier}) retrying (attempt {attempt + 1}/{max_retries})")
+            if attempt < max_retries - 1 and consecutive_failures < circuit_breaker_threshold:
+                consecutive_failures += 1
+                time.sleep(_thread_local.retry_d
+
+**Executor output:** 1018 chars
+
+**Evaluator:** FAIL
+
+**Reasoning:**
+The proposed change introduces a significant breaking change in the retry logic:
+1. **Logical Error in Backoff Implementation:** The new code replaces a synchronous `time.sleep(_thread_local.retry_delay)` with `_run_async(asyncio.sleep(delay))`. In a typical synchronous execution loop (implied by the use of `time.sleep` in the original and the context of `_thread_local`), calling `asyncio.sleep` via a runner without actually awaiting the completion of the sleep or using it to block the current thread will result in the loop proceeding immediately to the next iteration (or the next attempt) without any actual delay. This defeats the purpose of the exponential backoff and can lead to rapid-fire retries that hit rate limits instantly.
+2. **Incomplete Code/Syntax Error:** 
+
+**Accepted:** NO
+
+## Cycle 10 -- 2026-04-13 16:06:52 UTC
+**Proposal:** Change the `if attempt < max_retries - 1` check to `if attempt < max_retries - 1 and consecutive_failures < circuit_breaker_threshold`. This ensures that retries only occur if the circuit breaker threshold has not been hit, improving reliability and preventing unnecessary retries.
+
+```python
+        except Exception as e:
+            log.error(f"Exception running subtask {spec.subtask_id} (tier={spec.assigned_tier}) on attempt {attempt + 1}: {type(e).__name__} - {e}", exc_info=True)
+            log.debug(f"Subtask {spec.subtask_id} (tier={spec.assigned_tier}) retrying (attempt {attempt + 1}/{max_retries})")
+            if attempt < max_retries - 1 and consecutive_failures < circuit_breaker_threshold:
+                consecutive_failures += 1
+                time.sleep(_thread_local.retry_d
+
+**Executor output:** 786 chars
+
+**Evaluator:** FAIL
+
+The proposed change is incomplete and introduces a syntax/logic error. The "New code" snippet provided is a fragment that ends abruptly: `escalation_artifact = {"error": "max retries exceeded"}`. 
+
+Crucially, the `else` block in the new code fails to handle the failure state for the subtask (e.g., marking it as failed in the `AutopilotState` or updating the `failed` dictionary), which is the primary responsibility of the loop when `max_retries` is reached. Furthermore, the snippet is missing the closing logic for the `try/except` block and the loop itself, making it impossible to verify if the `consecutive_failures` variable or `circuit_breaker_threshold` are correctly scoped or updated within the wider context of the `fan_out` or `subtask` execution logic.
+
+**Accepted:** NO
+
+## Cycle 10 -- 2026-04-13 16:07:33 UTC
+**Proposal:** Change the `if attempt < max_retries - 1` check to `if attempt < max_retries - 1 and consecutive_failures < circuit_breaker_threshold`. This ensures that retries only occur if the circuit breaker threshold has not been hit, improving reliability and preventing unnecessary retries.
+
+```python
+        except Exception as e:
+            log.error(f"Exception running subtask {spec.subtask_id} (tier={spec.assigned_tier}) on attempt {attempt + 1}: {type(e).__name__} - {e}", exc_info=True)
+            log.debug(f"Subtask {spec.subtask_id} (tier={spec.assigned_tier}) retrying (attempt {attempt + 1}/{max_retries})")
+            if attempt < max_retries - 1 and consecutive_failures < circuit_breaker_threshold:
+                consecutive_failures += 1
+                time.sleep(_thread_local.retry_d
+
+**Executor output:** 786 chars
+
+**Evaluator:** FAIL
+
+The proposed change is incomplete and introduces a syntax error/broken code. Specifically:
+1. **Incomplete Code**: The `else` block in the "New code" section ends abruptly with `escalation_artifact = {"error": "max retries exceeded"}`. It does not close the `if/else` block, the `except` block, or the surrounding loop/function context.
+2. **Broken Logic/Context**: The variable `consecutive_failures` and `circuit_breaker_threshold` are used in the logic, but they are not defined within the scope of the provided code snippet, making the change impossible to verify or implement safely without the surrounding context.
+3. **Incomplete Snippet**: The "Proposed" section also ends with a truncated line: `log.error(f"Max retries ({max_retries}) exceeded for subtask {spec.subtask_id} (tier={spe
+
+**Accepted:** NO
+
+## Cycle 10 -- 2026-04-13 16:07:33 UTC
+**Proposal:** Change the `if attempt < max_retries - 1` check to `if attempt < max_retries - 1 and consecutive_failures < circuit_breaker_threshold`. This ensures that retries only occur if the circuit breaker threshold has not been hit, improving reliability and preventing unnecessary retries.
+
+```python
+        except Exception as e:
+            log.error(f"Exception running subtask {spec.subtask_id} (tier={spec.assigned_tier}) on attempt {attempt + 1}: {type(e).__name__} - {e}", exc_info=True)
+            log.debug(f"Subtask {spec.subtask_id} (tier={spec.assigned_tier}) retrying (attempt {attempt + 1}/{max_retries})")
+            if attempt < max_retries - 1 and consecutive_failures < circuit_breaker_threshold:
+                consecutive_failures += 1
+                time.sleep(_thread_local.retry_d
+
+**Executor output:** 0 chars
+
+**Evaluator:** EXECUTOR/EVALUATOR FAIL after retries
+
+**Accepted:** NO
+
+## Run Summary -- 2026-04-13 16:07 UTC
+Accepted: 5/10 | Models: mistral-small3.1:24b -> bifrost-t1b -> bifrost-t2-gemma4

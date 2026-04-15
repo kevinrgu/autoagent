@@ -330,42 +330,147 @@ while max_attempts > 0:
   [Evaluator] bifrost-t2-gemma4 @ Forge ... (Retry 1)
   [Evaluator] 405 chars (28s)
   Response: FAIL
-The proposed code contains a syntax error that will prevent the script from running. The `finally` block at the end of the function is incomplete (`if acquired:`), which is a `SyntaxError`. Additionally, the code acquires a semaphore but lacks the corresponding `sem.release()` call within that `finally` block, which would lead to a permanent deadlock once the semaphore's permit count reaches zero.
+The proposed c
 
   Result: REJECTED
 
   [Executor] bifrost-t1b @ Bifrost ... (Retry 2)
-  [Executor] 4610 chars (168s)
+  [Executor] 3012 chars (47s)
 
   [Evaluator] bifrost-t2-gemma4 @ Forge ... (Retry 2)
-  [Evaluator] 702 chars (38s)
+  [Evaluator] 1024 chars (112s)
   Response: FAIL
-The proposed code contains a critical syntax error that will prevent the program from running. The `finally` block at the end of the `_run_subtask_with_semaphore` function is incomplete:
 
-```python
-    finally:
-        if acquired:
-```
+The proposed change introduces a significant regression in the reliability of the subtask execution. While the semaphore acquisition loop correctly implements exponential backoff with jitter, the subtask execution retry loop (`for attempt in range(max_retries)`) lacks any `sleep` or delay mechanism. 
 
-The code terminates abruptly after the `if` statement. In a semaphore-guarded function, this block is essential for releasing the semaphore (e.g., `sem.release()`) to prevent deadlocks in the pipeline. Without this, if a subtask completes or fails, the semaphore remains locked, eventually causing all subsequent subtasks to hang. 
+If a transient error (like `ConnectionError` or `OSError`) occurs during `run_subtask`, the code catches the error and calls `handle_retryable_error`. Based on the provided "Proposed" snippet, `handle_retryable_error` only performs logging. Consequently, the `for` loop will immediately proceed to the next iteration, exhausting all retries in a "tight loop" almost instantaneously. This defeats the purpose of a retry mechanism and can exacerbate system strain (thundering herd problem) during periods of instability.
 
-Additionally, the logic for the `finally` block is missing the actual release mechanism, and the code is syntactically invalid.
+Additionally, the `backoff_time` variable passed to `handle_retryable_error` is the stale value left over from the semaphore acquisition loop and is not updated within the subtask execution loop.
 
   Result: REJECTED
 
   [Executor] bifrost-t1b @ Bifrost ... (Retry 3)
-  [Executor] 4000 chars (237s)
+  [Executor] 3012 chars (67s)
 
   [Evaluator] bifrost-t2-gemma4 @ Forge ... (Retry 3)
-  [Evaluator] 290 chars (96s)
+  [Evaluator] 673 chars (51s)
   Response: FAIL
+The proposed change introduces a significant bug: if the `for` loop for retrying subtask execution exhausts all `max_retries` attempts due to a retryable error (e.g., `asyncio.TimeoutError`), the function will exit the loop and return `None` instead of a `SubtaskResult`. This violates the function's return type contract and will likely cause downstream crashes in the pipeline. 
 
-The proposed change is a regression in code quality. While the retry logic technically functions, the implementation is significantly worse than the original `for` loop for the following reasons:
-
-1.  **Increased Complexity**: Replacing a standard, idiomatic `for attempt in range(max
+Additionally, the `backoff_time` passed to `handle_retryable_error` is the value left over from the semaphore acquisition `while` loop; there is no logic within the `for` loop to reset or update this backoff for the subtask execution retries, which could lead to incorrect retry timing.
 
   Result: REJECTED
 
 ============================================================
-  SESSION COMPLETE: 9/10 accepted
+  CYCLE 9
+============================================================
+
+  [Proposer] mistral-small3.1:24b @ Bifrost ...
+  [Proposer] 738 chars (46s)
+  Preview: Use a context manager for semaphore acquisition to ensure it is released even if an exception occurs. This improves resource management.
+
+```python
+    with _run_async(asyncio.shield(acquire_semaphore(sem, max_retries=max_retries - attempt))) as acquired:
+        if not acquired:
+            # handl...
+
+  [Executor] bifrost-t1b @ Bifrost ... (Retry 1)
+  [Executor] 5952 chars (160s)
+
+  [Evaluator] bifrost-t2-gemma4 @ Forge ... (Retry 1)
+  [Evaluator] 1690 chars (77s)
+  Response: FAIL
+The proposed change introduces several critical errors that will cause the code to crash at runtime:
+
+1.  **TypeError (Context Manager Error):** The code attempts to use `_run_async(...)` as a context manager: `with _run_async(...) as acquired:`. Based on the usage in the rest of the codebase (e.g., `return _run_async(run_subtask(spec))`), `_run_async` is a function that executes a coroutine and returns its result. Since `acquire_semaphore` returns a `bool`, `_run_async` will return a `bool`. A boolean cannot be used as a context manager, and this will raise a `TypeError`.
+
+2.  **Indentation/Syntax Error:** The `except` block within the `for` loop contains significant indentation errors. Specifically, the `if attempt < max_retries - 1:` block and its subsequent `else` block are misaligned (using 3, 4, and 5 spaces inconsistently), which will trigger an `IndentationError` in Python.
+
+3.  **Logic Error (Semaphore Leak):** The `finally` block `if acquired: pass` performs no action. If the semaphore is acquired via `acquire_semaphore`, it must be explicitly released. Even if `_run_async` were a context manager, the logic inside the `with` block contains a `return` statement (in the `else` branch of the subtask loop), which might bypass necessary cleanup if the context manager was intended to handle the semaphore release.
+
+4.  **Broken Circuit Breaker Logic:** The variable `attempt` is used both for the semaphore acquisition loop and the subtask execution loop, but the scope and incrementing of these variables are overlapping in a way that makes the logic for `max_retries` and `consecutive_failures` unpredictable and prone to early termination or infinite loops.
+
+  Result: REJECTED
+
+  [Executor] bifrost-t1b @ Bifrost ... (Retry 2)
+  [Executor] 4721 chars (129s)
+
+  [Evaluator] bifrost-t2-gemma4 @ Forge ... (Retry 2)
+  [Evaluator] 356 chars (25s)
+  Response: FAIL
+The provided code contains a syntax error. The `finally` block at the end of the `_run_subtask_with_semaphore` function is incomplete (`finally: if acquired:`), which will result in a `SyntaxError` and prevent the code from running. Additionally, the logic within the `finally` block is unfinished, leaving the semaphore's release mechanism undefined.
+
+  Result: REJECTED
+
+  [Executor] bifrost-t1b @ Bifrost ... (Retry 3)
+  [Executor] 5137 chars (243s)
+
+  [Evaluator] bifrost-t2-gemma4 @ Forge ... (Retry 3)
+  [Evaluator] 1313 chars (54s)
+  Response: FAIL
+The proposed code contains several critical issues that will prevent it from running:
+
+1.  **Indentation Errors**: There are multiple `IndentationError` syntax errors. Specifically, the line `_thread_local.retry_delay *= 2` is misaligned with the line above it, and the `result = SubtaskResult(...)` block within the `else` clause is also incorrectly indented.
+2.
+3.  **Variable Shadowing**: The variable `attempt` is used in the outer `while` loop to track semaphore acquisition attempts, but it is then redefined in the inner `for attempt in range(max_retries)` loop. This shadowing can lead to unpredictable behavior in the outer loop's logic (such as the `attempt += 1` increment).
+4.  **Resource Leak Risk**: While the code uses a context manager, the `acquire_semaphore` function provided in the original snippet only performs `await semaphore.acquire()` and never calls `release()`. Unless the `_run_async` context manager explicitly handles `semaphore.release()`, the semaphore will be leaked every time a subtask runs, eventually deadlocking the pipeline.
+5.  **Logic Complexity**: The nested `try/except` and `while/for` loops with multiple `return` points make the control flow extremely difficult to trace and prone to edge-case failures (e.g., the circuit breaker logic is partially duplicated).
+
+  Result: REJECTED
+
+============================================================
+  CYCLE 10
+============================================================
+
+  [Proposer] mistral-small3.1:24b @ Bifrost ...
+  [Proposer] 1094 chars (65s)
+  Preview: Change the `if attempt < max_retries - 1` check to `if attempt < max_retries - 1 and consecutive_failures < circuit_breaker_threshold`. This ensures that retries only occur if the circuit breaker threshold has not been hit, improving reliability and preventing unnecessary retries.
+
+```python
+       ...
+
+  [Executor] bifrost-t1b @ Bifrost ... (Retry 1)
+  [Executor] 1018 chars (50s)
+
+  [Evaluator] bifrost-t2-gemma4 @ Forge ... (Retry 1)
+  [Evaluator] 1352 chars (9s)
+  Response: FAIL
+
+**Reasoning:**
+The proposed change introduces a significant breaking change in the retry logic:
+1. **Logical Error in Backoff Implementation:** The new code replaces a synchronous `time.sleep(_thread_local.retry_delay)` with `_run_async(asyncio.sleep(delay))`. In a typical synchronous execution loop (implied by the use of `time.sleep` in the original and the context of `_thread_local`), calling `asyncio.sleep` via a runner without actually awaiting the completion of the sleep or using it to block the current thread will result in the loop proceeding immediately to the next iteration (or the next attempt) without any actual delay. This defeats the purpose of the exponential backoff and can lead to rapid-fire retries that hit rate limits instantly.
+2. **Incomplete Code/Syntax Error:** The proposed snippet is truncated/incomplete (ends abruptly at `spec.subtask_id` in the "Proposed" description and contains logic that isn't fully integrated into the provided "Original" context), making it impossible to verify the full impact on the `subtask` execution loop.
+3. **Complexity/Risk:** Introducing `random.uniform` and `asyncio.sleep` into what appears to be a thread-local-based synchronous retry loop introduces high risk of race conditions or non-deterministic behavior in a pipeline that relies on `SqliteSaver` and state management.
+
+  Result: REJECTED
+
+  [Executor] bifrost-t1b @ Bifrost ... (Retry 2)
+  [Executor] 786 chars (39s)
+
+  [Evaluator] bifrost-t2-gemma4 @ Forge ... (Retry 2)
+  [Evaluator] 773 chars (6s)
+  Response: FAIL
+
+The proposed change is incomplete and introduces a syntax/logic error. The "New code" snippet provided is a fragment that ends abruptly: `escalation_artifact = {"error": "max retries exceeded"}`. 
+
+Crucially, the `else` block in the new code fails to handle the failure state for the subtask (e.g., marking it as failed in the `AutopilotState` or updating the `failed` dictionary), which is the primary responsibility of the loop when `max_retries` is reached. Furthermore, the snippet is missing the closing logic for the `try/except` block and the loop itself, making it impossible to verify if the `consecutive_failures` variable or `circuit_breaker_threshold` are correctly scoped or updated within the wider context of the `fan_out` or `subtask` execution logic.
+
+  Result: REJECTED
+
+  [Executor] bifrost-t1b @ Bifrost ... (Retry 3)
+  [Executor] 786 chars (36s)
+
+  [Evaluator] bifrost-t2-gemma4 @ Forge ... (Retry 3)
+  [Evaluator] 803 chars (5s)
+  Response: FAIL
+
+The proposed change is incomplete and introduces a syntax error/broken code. Specifically:
+1. **Incomplete Code**: The `else` block in the "New code" section ends abruptly with `escalation_artifact = {"error": "max retries exceeded"}`. It does not close the `if/else` block, the `except` block, or the surrounding loop/function context.
+2. **Broken Logic/Context**: The variable `consecutive_failures` and `circuit_breaker_threshold` are used in the logic, but they are not defined within the scope of the provided code snippet, making the change impossible to verify or implement safely without the surrounding context.
+3. **Incomplete Snippet**: The "Proposed" section also ends with a truncated line: `log.error(f"Max retries ({max_retries}) exceeded for subtask {spec.subtask_id} (tier={spec`.
+
+  Result: REJECTED
+
+============================================================
+  SESSION COMPLETE: 5/10 accepted
 ============================================================

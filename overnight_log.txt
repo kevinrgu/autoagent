@@ -1,0 +1,1 @@
+2026-04-15T02:00:01.968479 WARNING: main (0276cad feat: auto-commit accepted changes at end of overnight run) is behind latest commit (a49bf83 fleet_audit: capability-aware thinking suppression)

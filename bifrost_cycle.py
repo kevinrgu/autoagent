@@ -52,8 +52,16 @@ ACTIVE_TEMPERATURE = 0.7
 # ============================================================================
 
 def call_llm(url: str, model: str, system: str, user: str,
-             num_ctx: int = 8192, temperature: float | None = None) -> str:
-    """Call an Ollama endpoint. No max_tokens -- full-length response."""
+             num_ctx: int = 8192, temperature: float | None = None,
+             max_tokens: int = 1500) -> str:
+    """Call an Ollama/llama-server endpoint.
+
+    Fix 1: Ollama defaults num_predict=128, which truncates proposer/executor
+    output at ~500 chars. We set both OpenAI-standard max_tokens and
+    Ollama-specific options.num_predict so whichever backend is in use honors
+    the cap. keep_alive=15m keeps big models (qwen3:30b) resident across the
+    evaluator swap within a cycle.
+    """
     payload = {
         "model": model,
         "messages": [
@@ -62,7 +70,9 @@ def call_llm(url: str, model: str, system: str, user: str,
         ],
         "stream": False,
         "temperature": temperature if temperature is not None else ACTIVE_TEMPERATURE,
-        "options": {"num_ctx": num_ctx},
+        "max_tokens": max_tokens,
+        "options": {"num_ctx": num_ctx, "num_predict": max_tokens},
+        "keep_alive": "15m",
     }
     r = httpx.post(url, json=payload, timeout=TIMEOUT)
     r.raise_for_status()
@@ -197,6 +207,45 @@ def backup_target(target_path: str):
         bak = p.with_suffix(".py.bak")
         bak.write_text(p.read_text(encoding="utf-8"), encoding="utf-8")
         print(f"  [Backup] {p.name} -> {bak.name}")
+
+
+def warmup_models() -> None:
+    """Fix 6: Pre-load proposer/executor/evaluator models with keep_alive=15m.
+
+    Ollama defaults to OLLAMA_MAX_LOADED_MODELS=1, so calls that target
+    different models will thrash the active model. Warming each model in
+    sequence ensures the first real call does not pay a cold-load penalty,
+    and keep_alive=15m (baked into call_llm) keeps them resident across the
+    proposer -> executor -> evaluator swap within a cycle.
+    """
+    roles = [
+        ("Proposer",  PROPOSER_URL,  PROPOSER_MODEL),
+        ("Executor",  EXECUTOR_URL,  EXECUTOR_MODEL),
+        ("Evaluator", EVALUATOR_URL, EVALUATOR_MODEL),
+    ]
+    print("\n  [Warmup] Pre-loading models with keep_alive=15m ...")
+    for name, url, model in roles:
+        if not url or not model:
+            continue
+        t0 = time.time()
+        try:
+            r = httpx.post(
+                url,
+                json={
+                    "model": model,
+                    "messages": [{"role": "user", "content": "ping"}],
+                    "stream": False,
+                    "max_tokens": 1,
+                    "options": {"num_predict": 1},
+                    "keep_alive": "15m",
+                },
+                timeout=180,
+            )
+            elapsed = time.time() - t0
+            print(f"  [Warmup] {name} ({model}): {r.status_code} ({elapsed:.0f}s)")
+        except Exception as e:
+            elapsed = time.time() - t0
+            print(f"  [Warmup] {name} ({model}): FAILED ({elapsed:.0f}s) {e}")
 
 
 def extract_signatures(code: str) -> str:
@@ -372,10 +421,16 @@ def propose(objective: str, target_path: str, target_code: str,
     sig_summary = extract_signatures(target_code)
 
     # Use pre-selected target function (picked once in run_cycle so proposer
-    # and executor see the same function)
+    # and executor see the same function). When set, the proposer MUST only
+    # suggest changes to this function — no wandering.
     focus_section = ""
     if target_fn:
-        focus_section = f"\n\nSUGGESTED TARGET FUNCTION (improve THIS one):\n```python\n{target_fn['source']}\n```"
+        focus_section = (
+            f"\n\nTARGET FUNCTION — you MUST only suggest changes to this function "
+            f"(name: `{target_fn['name']}`). Do NOT suggest changes to any other function. "
+            f"Do NOT rename or replace it with a different function.\n"
+            f"```python\n{target_fn['source']}\n```"
+        )
 
     # Build rejection feedback section
     rejection_section = ""
@@ -396,25 +451,50 @@ def propose(objective: str, target_path: str, target_code: str,
             "- Check the function signatures below to know which functions are async vs sync"
         )
 
+    pick_different_line = (
+        "" if target_fn else
+        "Pick a DIFFERENT function each time — do not repeat the same suggestion pattern. "
+    )
     system_prompt = (
         "You are a senior Python developer. Suggest ONE small, safe improvement. "
         "Keep your response under 800 chars. Just state WHAT to change and WHY in 2-3 sentences, "
         "then show the improved code snippet. No markdown headers, no numbered lists, no verbose analysis. "
         "Do not suggest changes to call_llm or imports. No new dependencies. No signature changes. "
-        "Pick a DIFFERENT function each time — do not repeat the same suggestion pattern.\n\n"
+        "No new type imports (e.g. Coroutine, Any) — only use names already imported in the file. "
+        f"{pick_different_line}\n\n"
         f"{rules_block}\n\n"
         f"FUNCTION SIGNATURES:\n{sig_summary}"
         f"{focus_section}"
         f"{rejection_section}"
     )
 
+    # Fix 2: when target_fn is set, send ONLY a short user prompt. The
+    # function source is already in the system prompt (focus_section). Sending
+    # the full file in the user message causes the proposer to fixate on
+    # whatever function appears first in the file (e.g. gate_node) regardless
+    # of target.
+    if target_fn:
+        proposer_user = (
+            f"Objective: {objective}\n\n"
+            f"Suggest ONE small improvement to the target function "
+            f"`{target_fn['name']}` shown above. Do not reference any other function."
+        )
+    else:
+        proposer_user = (
+            f"Objective: {objective}\n\n"
+            f"Code:\n```python\n{target_code[:10000]}"
+            f"{'...[TRUNCATED]' if len(target_code) > 10000 else ''}\n```\n\n"
+            f"Suggest one improvement:"
+        )
+
     t0 = time.time()
     try:
         proposal = call_llm(
             PROPOSER_URL, PROPOSER_MODEL,
             system_prompt,
-            f"Objective: {objective}\n\nCode:\n```python\n{target_code[:10000]}{'...[TRUNCATED]' if len(target_code) > 10000 else ''}\n```\n\nSuggest one improvement:",
+            proposer_user,
             num_ctx=ACTIVE_NUM_CTX,
+            max_tokens=1500,
         )
     except Exception as e:
         print(f"  [Proposer] FAIL ({time.time()-t0:.0f}s): {e}")
@@ -427,12 +507,26 @@ def propose(objective: str, target_path: str, target_code: str,
 
     print(f"  [Proposer] Empty/short, retrying simpler prompt...")
     t0 = time.time()
+    if target_fn:
+        retry_user = (
+            f"Suggest one small improvement to function `{target_fn['name']}`:\n"
+            f"```python\n{target_fn['source']}\n```\n"
+            f"NEVER use raw 'await' in sync def -- use _run_async() instead."
+        )
+    else:
+        retry_user = (
+            f"Suggest one small improvement to this Python code (not call_llm). "
+            f"NEVER use raw 'await' in sync def -- use _run_async() instead.\n"
+            f"```python\n{target_code[:5000]}"
+            f"{chr(10) + '...[TRUNCATED]' if len(target_code) > 5000 else ''}\n```"
+        )
     try:
         proposal = call_llm(
             PROPOSER_URL, PROPOSER_MODEL,
             "You are a code expert. Be brief.",
-            f"Suggest one small improvement to this Python code (not call_llm). NEVER use raw 'await' in sync def -- use _run_async() instead.\n```python\n{target_code[:5000]}{chr(10) + '...[TRUNCATED]' if len(target_code) > 5000 else ''}\n```",
+            retry_user,
             num_ctx=ACTIVE_NUM_CTX,
+            max_tokens=1500,
         )
     except Exception as e:
         print(f"  [Proposer] Retry FAIL ({time.time()-t0:.0f}s): {e}")
@@ -513,6 +607,7 @@ def run_cycle(cycle_num: int, objective: str, target_path: str,
                 executor_system,
                 executor_user,
                 num_ctx=ACTIVE_NUM_CTX,
+                max_tokens=2000,
             )
         except httpx.HTTPStatusError as e:
             error_message = f"HTTP error: {e.response.status_code} - {e.response.text}" if e.response else str(e)
@@ -555,9 +650,16 @@ def run_cycle(cycle_num: int, objective: str, target_path: str,
                 print("  [Isolation] Executor did not output a function (no def/async def)")
                 retries += 1
                 continue
+            # STRICT: executor must NOT rename the function — renaming creates
+            # duplicate-definition corruption (see cycle 5 _extract_code disaster)
             fn_match = re.search(r"(async\s+)?def\s+(\w+)", new_code)
             if fn_match and fn_match.group(2) != target_fn["name"]:
-                print(f"  [Isolation] WARNING: executor renamed {target_fn['name']} -> {fn_match.group(2)}")
+                print(f"  [Isolation] REJECTED: executor renamed {target_fn['name']} -> {fn_match.group(2)}")
+                log_decision(decisions_path, cycle_num, proposal[:800],
+                             f"REJECTED: executor renamed function {target_fn['name']} -> {fn_match.group(2)}",
+                             False, len(new_code))
+                retries += 1
+                continue
             # Splice the new function into the full file at the known line range
             code_to_check = splice_function_back(
                 target_code, new_code, target_fn["start"], target_fn["end"]
@@ -588,6 +690,49 @@ def run_cycle(cycle_num: int, objective: str, target_path: str,
             continue
         print("  [SyntaxCheck] OK")
 
+        # Semantic structure check: compare top-level symbols before/after.
+        # Catches renamed/deleted target functions and duplicate definitions
+        # that py_compile doesn't notice (e.g., two functions with the same
+        # name — the disaster from cycle 5 _extract_code).
+        try:
+            before_tree = ast.parse(target_code)
+            after_tree = ast.parse(code_to_check)
+            before_syms = [n.name for n in ast.walk(before_tree)
+                           if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))]
+            after_syms = [n.name for n in ast.walk(after_tree)
+                          if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))]
+            before_set = set(before_syms)
+            after_set = set(after_syms)
+            missing = before_set - after_set
+            # Duplicate detection: same name appearing more than once
+            from collections import Counter as _Counter
+            after_counts = _Counter(after_syms)
+            dupes = {name: cnt for name, cnt in after_counts.items() if cnt > 1}
+            structure_err = None
+            if missing:
+                structure_err = f"missing symbols: {sorted(missing)}"
+            elif dupes:
+                structure_err = f"duplicate symbols: {dupes}"
+            elif len(after_syms) != len(before_syms):
+                structure_err = f"symbol count changed: {len(before_syms)} -> {len(after_syms)}"
+            if structure_err:
+                print(f"  [StructureCheck] FAIL: {structure_err}")
+                log_decision(decisions_path, cycle_num, proposal[:800],
+                             f"STRUCTURE_ERROR: {structure_err}", False, len(new_code))
+                reason = f"STRUCTURE_ERROR: {structure_err[:120]}"
+                _recent_rejections.append(reason)
+                if len(_recent_rejections) > MAX_REJECTION_HISTORY:
+                    _recent_rejections.pop(0)
+                retries += 1
+                continue
+            print("  [StructureCheck] OK")
+        except SyntaxError:
+            # If AST parse of code_to_check fails (shouldn't — syntax_check
+            # passed) treat as a syntax failure
+            print("  [StructureCheck] AST parse failed after syntax_check passed")
+            retries += 1
+            continue
+
         print(f"\n  [Evaluator] {EVALUATOR_MODEL} @ Forge ... (Retry {retries + 1})")
         t0 = time.time()
         eval_system = (
@@ -597,16 +742,37 @@ def run_cycle(cycle_num: int, objective: str, target_path: str,
         )
         if ACTIVE_EVALUATOR_PROMPT_EXTRA:
             eval_system += "\n\n" + ACTIVE_EVALUATOR_PROMPT_EXTRA
-        try:
-            evaluation = call_llm(
-                EVALUATOR_URL, EVALUATOR_MODEL,
-                eval_system,
+
+        # Build evaluator payload: when a function is isolated, send only that
+        # function. Previously we sent target_code[:12000] which blinded the
+        # evaluator to any function past line ~300.
+        if target_fn:
+            eval_user = (
+                f"Objective: {objective}\n\n"
+                f"Context: only the function `{target_fn['name']}` is being modified. "
+                f"The rest of the file is unchanged.\n\n"
+                f"Original function:\n```python\n{target_fn['source']}\n```\n\n"
+                f"Proposed change description:\n{proposal[:1000]}\n\n"
+                f"New function:\n```python\n{new_code[:4000]}\n```\n\n"
+                f"PASS or FAIL? Evaluate the function change in isolation — "
+                f"assume all other symbols exist in the full file."
+            )
+        else:
+            eval_user = (
                 f"Objective: {objective}\n\n"
                 f"Original:\n```python\n{target_code[:12000]}\n```\n\n"
                 f"Proposed:\n{proposal[:1000]}\n\n"
                 f"New code:\n```python\n{new_code[:4000]}\n```\n\n"
-                f"PASS or FAIL?",
+                f"PASS or FAIL?"
+            )
+
+        try:
+            evaluation = call_llm(
+                EVALUATOR_URL, EVALUATOR_MODEL,
+                eval_system,
+                eval_user,
                 num_ctx=ACTIVE_NUM_CTX,
+                max_tokens=1500,
             )
         except httpx.HTTPStatusError as e:
             error_message = f"HTTP error: {e.response.status_code} - {e.response.text}" if e.response else str(e)
@@ -636,12 +802,9 @@ def run_cycle(cycle_num: int, objective: str, target_path: str,
                 evaluation = call_llm(
                     EVALUATOR_URL, EVALUATOR_MODEL,
                     eval_system,
-                    f"Objective: {objective}\n\n"
-                    f"Original:\n```python\n{target_code[:12000]}\n```\n\n"
-                    f"Proposed:\n{proposal[:1000]}\n\n"
-                    f"New code:\n```python\n{new_code[:4000]}\n```\n\n"
-                    f"PASS or FAIL?",
+                    eval_user,
                     num_ctx=ACTIVE_NUM_CTX,
+                    max_tokens=1500,
                 )
             except Exception:
                 evaluation = ""
@@ -678,9 +841,31 @@ def run_cycle(cycle_num: int, objective: str, target_path: str,
                     apply_result = smart_apply(target_path, target_code, new_code)
                 print(f"  [Apply] {apply_result}")
 
-                # Rollback guard: verify target file still compiles
+                # Rollback guard: verify target file still compiles AND
+                # preserves the symbol set (no missing target_fn, no dupes)
                 written_code = read_file(target_path)
                 post_ok, post_err = syntax_check(written_code)
+                if post_ok:
+                    try:
+                        pre_tree = ast.parse(target_code)
+                        post_tree = ast.parse(written_code)
+                        pre_names = [n.name for n in ast.walk(pre_tree)
+                                     if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))]
+                        post_names = [n.name for n in ast.walk(post_tree)
+                                      if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))]
+                        from collections import Counter as _C
+                        post_counts = _C(post_names)
+                        missing = set(pre_names) - set(post_names)
+                        dupes = {k: v for k, v in post_counts.items() if v > 1}
+                        if missing:
+                            post_ok = False
+                            post_err = f"missing symbols after write: {sorted(missing)}"
+                        elif dupes:
+                            post_ok = False
+                            post_err = f"duplicate symbols after write: {dupes}"
+                    except SyntaxError as e:
+                        post_ok = False
+                        post_err = f"post-write AST parse failed: {e}"
                 if not post_ok:
                     bak_path = Path(target_path).with_suffix(".py.bak")
                     if bak_path.exists():
@@ -811,6 +996,7 @@ def main():
         return
 
     backup_target(target)
+    warmup_models()
 
     accepted_count = 0
     for cycle in range(1, args.max_cycles + 1):

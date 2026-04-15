@@ -1,0 +1,94 @@
+BIFROST Session O -- Local 3-Agent Cycle
+  Profile:   /coding
+  Proposer:  mistral-small3.1:24b
+  Executor:  qwen3:30b
+  Evaluator: bifrost-t2-gemma4
+  Objective: Improve the BIFROST AUTOPILOT pipeline. Focus on SIMPLE changes only: add logging statements, add guard clauses, improve
+  Target:    D:\Projects\bifrost-router\autopilot_graph.py
+  Decisions: profiles/CODING/decisions_postfix.md
+  Cycles:    3
+  num_ctx:   32768
+  [Backup] autopilot_graph.py -> autopilot_graph.py.bak
+
+  [Warmup] Pre-loading models with keep_alive=15m ...
+  [Warmup] Proposer (mistral-small3.1:24b): 200 (36s)
+  [Warmup] Executor (qwen3:30b): 404 (0s)
+  [Warmup] Evaluator (bifrost-t2-gemma4): 200 (9s)
+
+============================================================
+  CYCLE 1
+============================================================
+  [TargetFn] _scout_coherence_pass_async (35 lines, line 1113-1147)
+
+  [Proposer] mistral-small3.1:24b @ Bifrost ...
+  [Proposer] 1949 chars (54s)
+  Preview: Add a check for empty input to avoid unnecessary processing and improve robustness. This ensures that the function handles edge cases gracefully and avoids potential errors.
+
+```python
+async def _scout_coherence_pass_async(assembled: str, state: dict) -> str:
+    """Send assembled proposal through T...
+
+  [Executor] qwen3:30b @ Bifrost ... (Retry 1)
+  [Executor] FAIL (0s): HTTP error: 404 - {"error":{"message":"model 'qwen3:30b' not found","type":"not_found_error","param":null,"code":null}}
+
+
+  [Executor] qwen3:30b @ Bifrost ... (Retry 2)
+  [Executor] FAIL (0s): HTTP error: 404 - {"error":{"message":"model 'qwen3:30b' not found","type":"not_found_error","param":null,"code":null}}
+
+
+  [Executor] qwen3:30b @ Bifrost ... (Retry 3)
+  [Executor] FAIL (0s): HTTP error: 404 - {"error":{"message":"model 'qwen3:30b' not found","type":"not_found_error","param":null,"code":null}}
+
+
+============================================================
+  CYCLE 2
+============================================================
+  [TargetFn] _run_subtask_with_semaphore (29 lines, line 118-146)
+
+  [Proposer] mistral-small3.1:24b @ Bifrost ...
+  [Proposer] 2195 chars (60s)
+  Preview: Add a guard clause to ensure that `sem` is not `None` before using it in the `with` statement. This prevents potential `RuntimeError` if `_TIER_SEMAPHORES.get` returns `None` and `_DEFAULT_SEMAPHORE` is also `None`. This change improves robustness.
+
+```python
+def _run_subtask_with_semaphore(spec: Su...
+
+  [Executor] qwen3:30b @ Bifrost ... (Retry 1)
+  [Executor] FAIL (0s): HTTP error: 404 - {"error":{"message":"model 'qwen3:30b' not found","type":"not_found_error","param":null,"code":null}}
+
+
+  [Executor] qwen3:30b @ Bifrost ... (Retry 2)
+  [Executor] FAIL (0s): HTTP error: 404 - {"error":{"message":"model 'qwen3:30b' not found","type":"not_found_error","param":null,"code":null}}
+
+
+  [Executor] qwen3:30b @ Bifrost ... (Retry 3)
+  [Executor] FAIL (0s): HTTP error: 404 - {"error":{"message":"model 'qwen3:30b' not found","type":"not_found_error","param":null,"code":null}}
+
+
+============================================================
+  CYCLE 3
+============================================================
+  [TargetFn] _needs_review (10 lines, line 801-810)
+
+  [Proposer] mistral-small3.1:24b @ Bifrost ...
+  [Proposer] 826 chars (25s)
+  Preview: Add a guard clause to handle the case where `l6` is `None`. This will prevent potential `KeyError` exceptions when accessing `l6["passed"]` or `l6["summary"]`.
+
+```python
+def _needs_review(assembled: str, l6: dict) -> tuple[bool, str]:
+    """Return (should_review, reason) based on L6 result and stu...
+
+  [Executor] qwen3:30b @ Bifrost ... (Retry 1)
+  [Executor] FAIL (0s): HTTP error: 404 - {"error":{"message":"model 'qwen3:30b' not found","type":"not_found_error","param":null,"code":null}}
+
+
+  [Executor] qwen3:30b @ Bifrost ... (Retry 2)
+  [Executor] FAIL (0s): HTTP error: 404 - {"error":{"message":"model 'qwen3:30b' not found","type":"not_found_error","param":null,"code":null}}
+
+
+  [Executor] qwen3:30b @ Bifrost ... (Retry 3)
+  [Executor] FAIL (0s): HTTP error: 404 - {"error":{"message":"model 'qwen3:30b' not found","type":"not_found_error","param":null,"code":null}}
+
+
+============================================================
+  SESSION COMPLETE: 0/3 accepted
+============================================================

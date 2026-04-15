@@ -212,8 +212,12 @@ def extract_signatures(code: str) -> str:
     return "\n".join(lines)
 
 
-def pick_target_function(code: str, max_lines: int = 80) -> str | None:
-    """Pick a random function ≤max_lines from code. Returns function source or None."""
+def pick_target_function(code: str, max_lines: int = 80) -> dict | None:
+    """Pick a random function ≤max_lines from code.
+
+    Returns dict with keys: name, start (0-idx), end (exclusive 0-idx), source.
+    Returns None if no suitable function or code is unparseable.
+    """
     import random
     code_lines = code.split("\n")
     try:
@@ -244,7 +248,65 @@ def pick_target_function(code: str, max_lines: int = 80) -> str | None:
     name, start, end, fn_lines = pick
     fn_code = "\n".join(code_lines[start:end])
     print(f"  [TargetFn] {name} ({fn_lines} lines, line {start+1}-{end})")
-    return fn_code
+    return {"name": name, "start": start, "end": end, "source": fn_code}
+
+
+def extract_function_source(source: str, func_name: str):
+    """Extract one function by name from source.
+
+    Returns (func_source, start_line_0idx, end_line_0idx_exclusive) or None.
+    """
+    try:
+        tree = ast.parse(source)
+    except SyntaxError:
+        return None
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == func_name:
+            lines = source.split('\n')
+            start = node.lineno - 1
+            end = node.end_lineno if hasattr(node, 'end_lineno') and node.end_lineno else start + 1
+            return '\n'.join(lines[start:end]), start, end
+    return None
+
+
+def splice_function_back(source: str, new_func: str, start_line: int, end_line: int) -> str:
+    """Replace lines [start_line:end_line] in source with new_func source.
+
+    Preserves the original leading indentation of the function's ``def`` line.
+    If the executor outputs a function at column 0 but the target was a nested
+    (indented) function, the new function is re-indented to match — otherwise
+    the splice would break the containing function's scope.
+    """
+    lines = source.split('\n')
+    # Detect original indentation from the first non-blank line of the target
+    orig_indent = ""
+    for i in range(start_line, min(end_line, len(lines))):
+        if lines[i].strip():
+            orig_indent = lines[i][:len(lines[i]) - len(lines[i].lstrip())]
+            break
+
+    new_lines = new_func.rstrip('\n').split('\n')
+    # Detect executor's base indentation from its first non-blank line
+    exec_indent = ""
+    for nl in new_lines:
+        if nl.strip():
+            exec_indent = nl[:len(nl) - len(nl.lstrip())]
+            break
+
+    # Re-indent: strip executor's base indent, then prepend the original indent
+    if orig_indent != exec_indent:
+        rebased = []
+        for nl in new_lines:
+            if nl.startswith(exec_indent):
+                rebased.append(orig_indent + nl[len(exec_indent):])
+            elif nl.strip() == "":
+                rebased.append(nl)
+            else:
+                # Line has less indent than the base — leave as-is with orig prefix
+                rebased.append(orig_indent + nl.lstrip())
+        new_lines = rebased
+
+    return '\n'.join(lines[:start_line] + new_lines + lines[end_line:])
 
 
 def syntax_check(code: str) -> tuple[bool, str]:
@@ -302,17 +364,18 @@ def parse_program(path: str) -> dict:
 # PROPOSAL WITH RETRY
 # ============================================================================
 
-def propose(objective: str, target_path: str, target_code: str) -> str | None:
+def propose(objective: str, target_path: str, target_code: str,
+            target_fn: dict | None = None) -> str | None:
     print(f"\n  [Proposer] {PROPOSER_MODEL} @ Bifrost ...")
 
     # Build signature summary for proposer context
     sig_summary = extract_signatures(target_code)
 
-    # Pick a focused target function (≤80 lines preferred)
-    focused_fn = pick_target_function(target_code)
+    # Use pre-selected target function (picked once in run_cycle so proposer
+    # and executor see the same function)
     focus_section = ""
-    if focused_fn:
-        focus_section = f"\n\nSUGGESTED TARGET FUNCTION (improve THIS one):\n```python\n{focused_fn}\n```"
+    if target_fn:
+        focus_section = f"\n\nSUGGESTED TARGET FUNCTION (improve THIS one):\n```python\n{target_fn['source']}\n```"
 
     # Build rejection feedback section
     rejection_section = ""
@@ -391,7 +454,11 @@ def run_cycle(cycle_num: int, objective: str, target_path: str,
     print(f"  CYCLE {cycle_num}")
     print(f"{'='*60}")
 
-    proposal = propose(objective, target_path, target_code)
+    # Pick target function ONCE so proposer and executor see the same one.
+    # When set, the executor is sandboxed to this function only (see below).
+    target_fn = pick_target_function(target_code)
+
+    proposal = propose(objective, target_path, target_code, target_fn=target_fn)
     if not proposal:
         log_decision(decisions_path, cycle_num, "PROPOSER_FAIL", "", False)
         return False
@@ -410,13 +477,41 @@ def run_cycle(cycle_num: int, objective: str, target_path: str,
     while retries < MAX_RETRIES:
         print(f"\n  [Executor] {EXECUTOR_MODEL} @ Bifrost ... (Retry {retries + 1})")
         t0 = time.time()
+
+        # Function-isolated executor sandbox: when a target function is
+        # selected, the executor sees ONLY that function — never the full
+        # 1000+ line file. This prevents the executor from corrupting
+        # unrelated code.
+        if target_fn:
+            executor_system = (
+                "You are a Python implementer. You will be shown ONE function. "
+                "Output the COMPLETE modified function. Do NOT output code outside this function. "
+                "Start with def or async def. No markdown fences, no explanations, "
+                "no imports, no surrounding code. Just the full function body."
+            )
+            executor_user = (
+                f"Proposed change:\n{proposal[:1500]}\n\n"
+                f"Current function (this is ALL you can modify — do not output anything outside it):\n"
+                f"```python\n{target_fn['source']}\n```\n\n"
+                f"Output the COMPLETE modified function. Do NOT output code outside this function:"
+            )
+        else:
+            executor_system = (
+                "You are a Python implementer. Output ONLY the modified function. "
+                "Start with def or async def. No markdown fences, no explanations, no full file rewrites. "
+                "No prose before or after the code. Just the function."
+            )
+            executor_user = (
+                f"Proposed change:\n{proposal[:1500]}\n\n"
+                f"Current code:\n```python\n{target_code[:10000]}{'...[TRUNCATED]' if len(target_code) > 10000 else ''}\n```\n\n"
+                f"Output ONLY the modified function:"
+            )
+
         try:
             new_code = call_llm(
                 EXECUTOR_URL, EXECUTOR_MODEL,
-                "You are a Python implementer. Output ONLY the modified function. "
-                "Start with def or async def. No markdown fences, no explanations, no full file rewrites. "
-                "No prose before or after the code. Just the function.",
-                f"Proposed change:\n{proposal[:1500]}\n\nCurrent code:\n```python\n{target_code[:10000]}{'...[TRUNCATED]' if len(target_code) > 10000 else ''}\n```\n\nOutput ONLY the modified function:",
+                executor_system,
+                executor_user,
                 num_ctx=ACTIVE_NUM_CTX,
             )
         except httpx.HTTPStatusError as e:
@@ -447,15 +542,37 @@ def run_cycle(cycle_num: int, objective: str, target_path: str,
             retries += 1
             continue
 
-        # Try to apply as diff first; if it's a diff, syntax-check the patched result
-        diff_result = apply_diff(target_code, new_code)
-        is_diff_mode = diff_result is not None
+        # Isolation mode: splice the executor's function back into the full
+        # file and syntax-check the combined result. Otherwise, fall back to
+        # the legacy diff/smart_apply path.
+        diff_result = None
+        is_diff_mode = False
+        is_isolation_mode = False
 
-        if is_diff_mode:
-            print("  [DiffMode] SEARCH/REPLACE blocks detected")
-            code_to_check = diff_result
+        if target_fn:
+            # Executor must have returned a function (def/async def)
+            if not re.match(r"^(async\s+)?def\s+", new_code):
+                print("  [Isolation] Executor did not output a function (no def/async def)")
+                retries += 1
+                continue
+            fn_match = re.search(r"(async\s+)?def\s+(\w+)", new_code)
+            if fn_match and fn_match.group(2) != target_fn["name"]:
+                print(f"  [Isolation] WARNING: executor renamed {target_fn['name']} -> {fn_match.group(2)}")
+            # Splice the new function into the full file at the known line range
+            code_to_check = splice_function_back(
+                target_code, new_code, target_fn["start"], target_fn["end"]
+            )
+            is_isolation_mode = True
+            print(f"  [Isolation] Spliced {target_fn['name']} back into full file "
+                  f"(lines {target_fn['start']+1}-{target_fn['end']})")
         else:
-            code_to_check = new_code
+            diff_result = apply_diff(target_code, new_code)
+            is_diff_mode = diff_result is not None
+            if is_diff_mode:
+                print("  [DiffMode] SEARCH/REPLACE blocks detected")
+                code_to_check = diff_result
+            else:
+                code_to_check = new_code
 
         # Syntax pre-filter: catch basic errors before burning an evaluator call
         syn_ok, syn_err = syntax_check(code_to_check)
@@ -546,7 +663,14 @@ def run_cycle(cycle_num: int, objective: str, target_path: str,
 
         if accepted:
             try:
-                if is_diff_mode:
+                if is_isolation_mode:
+                    with open(target_path, 'w', encoding='utf-8') as f:
+                        f.write(code_to_check)
+                    apply_result = (
+                        f"Spliced isolated function {target_fn['name']} "
+                        f"into {Path(target_path).name}"
+                    )
+                elif is_diff_mode:
                     with open(target_path, 'w', encoding='utf-8') as f:
                         f.write(diff_result)
                     apply_result = "Applied via SEARCH/REPLACE diff"

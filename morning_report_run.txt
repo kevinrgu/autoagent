@@ -1,8 +1,8 @@
-morning_report.py — 2026-04-14 06:00:02
+morning_report.py — 2026-04-15 06:00:02
   Wrote C:\Users\jhpri\projects\autoagent\MORNING_REPORT.md
 
   Status: READY
-  Total cycles: 103  accepted: 13  rejected: 90  rate: 12.6%
+  Total cycles: 155  accepted: 35  rejected: 120  rate: 22.6%
   OK — OK: autopilot_graph.py
   OK — OK: subtask_graph.py
 
@@ -10,6 +10,7 @@ morning_report.py — 2026-04-14 06:00:02
 === pk_sync ===
 
 [1] REPORT*.md files
+  [OK] FLEET_TEST_REPORT.md
   [OK] MORNING_REPORT.md
   [OK] SESSION_J2_REPORT.md
   [OK] SESSION_O_THREE_PROFILES_REPORT.md
@@ -30,4 +31,4 @@ morning_report.py — 2026-04-14 06:00:02
 
 [manifest] L:\temp\pk-upload\pk_sync_manifest.txt
 
-Done: 7 copied, 4 skipped.
+Done: 8 copied, 4 skipped.

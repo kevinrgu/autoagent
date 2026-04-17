@@ -25,6 +25,8 @@ from pathlib import Path
 
 import httpx
 
+from session_o_gates import run_all_gates
+
 # ============================================================================
 # ENDPOINT CONFIG
 # ============================================================================
@@ -878,6 +880,25 @@ def run_cycle(cycle_num: int, objective: str, target_path: str,
                                  f"ROLLBACK: {post_err[:400]}", False, len(new_code))
                     retries += 1
                     continue
+
+                # Session O-SAFETY: canary gates before accepting change
+                gates_ok, gate_results = run_all_gates(Path(target_path))
+                if not gates_ok:
+                    bak_path = Path(target_path).with_suffix(".py.bak")
+                    if bak_path.exists():
+                        bak_path.replace(target_path)
+                    else:
+                        with open(target_path, "w", encoding="utf-8") as _f:
+                            _f.write(target_code)
+                    gate_summary = "; ".join(f"{n}:{d}" for n, ok, d in gate_results if not ok)
+                    print(f"  [GATES] FAIL -- restored {Path(target_path).name}")
+                    for gn, ok, detail in gate_results:
+                        print(f"    {'OK' if ok else 'FAIL'} {gn}: {detail}")
+                    log_decision(decisions_path, cycle_num, proposal[:800],
+                                 f"GATE_FAILURE: {gate_summary[:400]}", False, len(new_code))
+                    retries += 1
+                    continue
+                print("  [GATES] all passed")
 
                 return True
             except Exception as e:

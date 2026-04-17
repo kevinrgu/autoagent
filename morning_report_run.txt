@@ -1,34 +1,10 @@
-morning_report.py — 2026-04-15 06:00:02
+morning_report.py — 2026-04-16 06:00:02
   Wrote C:\Users\jhpri\projects\autoagent\MORNING_REPORT.md
 
   Status: READY
-  Total cycles: 155  accepted: 35  rejected: 120  rate: 22.6%
+  Total cycles: 377  accepted: 101  rejected: 276  rate: 26.8%
   OK — OK: autopilot_graph.py
   OK — OK: subtask_graph.py
 
 --- pk_sync ---
-=== pk_sync ===
-
-[1] REPORT*.md files
-  [OK] FLEET_TEST_REPORT.md
-  [OK] MORNING_REPORT.md
-  [OK] SESSION_J2_REPORT.md
-  [OK] SESSION_O_THREE_PROFILES_REPORT.md
-
-[2] Profile decisions.md
-  [--] profiles/CODING/decisions.md (not found)
-  [--] profiles/GENERAL/decisions.md (not found)
-  [--] profiles/RESEARCH/decisions.md (not found)
-
-[3] autoagent root files
-  [--] C:\Users\jhpri\projects\autoagent\active_profile.txt (not found)
-  [OK] profiles.json
-
-[4] bifrost-router files
-  [OK] fleet_config.json -> bifrost_fleet_config.json
-  [OK] main.py -> bifrost_main.py
-  [OK] config.py -> bifrost_config.py
-
-[manifest] L:\temp\pk-upload\pk_sync_manifest.txt
-
-Done: 8 copied, 4 skipped.
+[pk_sync] WARN: destination drive L:\ not available — skipping sync.

@@ -1,6 +1,6 @@
 # BIFROST Morning Report
 
-**Generated:** 2026-04-15 06:00:02  
+**Generated:** 2026-04-16 06:00:02  
 **Status:** READY
 
 ---
@@ -23,6 +23,20 @@
   research   OK        2176.8s
   git commit: bifrost-router (accepted target changes)
   git commit: autoagent (decisions + logs)
+
+# Run 20260416_0200 — 2026-04-16T02:33:50.229198
+  coding     OK         642.5s
+  general    OK         772.4s
+  research   OK         433.1s
+  git commit: bifrost-router (accepted target changes)
+  git commit: autoagent (decisions + logs)
+
+# Run 20260416_0200 — 2026-04-16T03:18:09.949953
+  coding     OK        1633.6s
+  general    OK        1405.0s
+  research   OK        1479.1s
+  git commit: bifrost-router (accepted target changes)
+  git commit: autoagent (decisions + logs)
 ```
 
 ---
@@ -31,10 +45,10 @@
 
 | Profile | Accepted | Rejected | Total | Accept Rate |
 |---------|----------|----------|-------|-------------|
-| CODING   |       14 |       23 |    37 |       37.8% |
-| GENERAL  |        9 |       47 |    56 |       16.1% |
-| RESEARCH |       12 |       50 |    62 |       19.4% |
-| **TOTAL** |       35 |      120 |   155 |       22.6% |
+| CODING   |       44 |      157 |   201 |       21.9% |
+| GENERAL  |       32 |       58 |    90 |       35.6% |
+| RESEARCH |       25 |       61 |    86 |       29.1% |
+| **TOTAL** |      101 |      276 |   377 |       26.8% |
 
 ---
 
@@ -47,6 +61,6 @@
 
 ## Raw Decisions Files Found
 
-- **CODING**: decisions_coding.md, decisions_coding_20260415_0200.md
-- **GENERAL**: decisions_general.md, decisions_general_20260415_0200.md
-- **RESEARCH**: decisions_research.md, decisions_research_20260415_0200.md
+- **CODING**: decisions_coding.md, decisions_coding_20260415_0200.md, decisions_coding_20260416_0200.md, decisions_coding_3m_mistral.md, decisions_coding_3machine.md, decisions_coding_final.md, decisions_coding_gemma4.md, decisions_coding_multi.md, decisions_coding_qwen3eval.md, decisions_coding_training.md, decisions_coding_training2.md, decisions_isolation_test.md, decisions_isolation_test2.md, decisions_postfix.md
+- **GENERAL**: decisions_general.md, decisions_general_20260415_0200.md, decisions_general_20260416_0200.md, decisions_general_final.md, decisions_general_training.md
+- **RESEARCH**: decisions_research.md, decisions_research_20260415_0200.md, decisions_research_20260416_0200.md

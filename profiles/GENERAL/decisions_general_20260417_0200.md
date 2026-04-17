@@ -408,3 +408,261 @@ def _run_rfp_coherence(spec: "SubtaskSpec", assembled_sections: str, graph_id: s
 The change correctly implements the requested improvement by adding the length of `assembled_sections` to the error log when the string is empty. While the length will always be 0 in this specific branch, the change follows the instruction to provide more context for debugging and does not introduce any breaking changes or complex logic.
 
 **Accepted:** YES
+
+## Cycle 6 -- 2026-04-17 06:44:20 UTC
+**Proposal:** Add a log message for when the `subtask_id` is present but `subtask_result` is missing. This will help in debugging and improve RFP output quality by ensuring all necessary details are logged. Add type hint for `time` module.
+
+```python
+def _update_job_registry(graph_id: str, subtasks_completed: int, subtasks_total: int, cloud_cost: float,
+                         *, subtask_id: str | None = None, subtask_result: "SubtaskResult | None" = None) -> None:
+    """Best-effort live registry update — never raises."""
+    if subtasks_total <= 0:
+        import logging
+        logging.warning(f"Invalid subtasks_total value: {subtasks_total} for graph_id {graph_id}")
+        return
+    try:
+        from main import _AUTOPILOT_JOBS, _AUTOPILOT_JOBS_LOCK
+        with _AUTOPILOT_JOBS_LOCK:
+            
+
+**Executor output:** 1821 chars
+
+**Evaluator:** PASS
+The change correctly implements a guard clause to log a warning when a `subtask_id` is provided without a corresponding `subtask_result`. This improves observability for debugging without altering the existing logic or introducing complex control flow. The use of local imports for `logging` is consistent with the existing pattern in the function.
+
+**Accepted:** YES
+
+## Cycle 7 -- 2026-04-17 06:46:12 UTC
+**Proposal:** Change the error message to inform the user which part of the input is invalid. This improves clarity when debugging issues with the function.
+
+```python
+def _has_dag_cycle(subtask_ids: list[SubtaskID], deps: dict[SubtaskID, list[SubtaskID]]) -> bool:
+    """Detect cycles in subtask dependency graph via DFS coloring."""
+    WHITE, GRAY, BLACK = 0, 1, 2
+
+    if not subtask_ids:
+        log.debug("No subtask IDs provided. No cycle detected.")
+        return False
+
+    if not deps:
+        log.debug("No dependencies provided. No cycle detected.")
+        return False
+
+    color = {sid: WHITE for sid in subtask_ids}
+
+    # Guard clause for self-dependency cycle check (as requested)
+    for node, dependencies in deps.items():
+        if node in dependencies:
+            log.warning(f"Cycle dete
+
+**Executor output:** 2508 chars
+
+**Evaluator:** FAIL
+
+The proposed change description states that the error message should be changed to inform the user which part of the input is invalid (distinguishing between `subtask_ids` and `deps`). However, the "New function" provided is identical to the "Original function" and does not implement this improvement. The error message `log.error("subtask_ids or deps are empty. Cannot perform DFS traversal.")` remains generic and does not specify which variable is empty.
+
+**Accepted:** NO
+
+## Cycle 7 -- 2026-04-17 06:47:22 UTC
+**Proposal:** Change the error message to inform the user which part of the input is invalid. This improves clarity when debugging issues with the function.
+
+```python
+def _has_dag_cycle(subtask_ids: list[SubtaskID], deps: dict[SubtaskID, list[SubtaskID]]) -> bool:
+    """Detect cycles in subtask dependency graph via DFS coloring."""
+    WHITE, GRAY, BLACK = 0, 1, 2
+
+    if not subtask_ids:
+        log.debug("No subtask IDs provided. No cycle detected.")
+        return False
+
+    if not deps:
+        log.debug("No dependencies provided. No cycle detected.")
+        return False
+
+    color = {sid: WHITE for sid in subtask_ids}
+
+    # Guard clause for self-dependency cycle check (as requested)
+    for node, dependencies in deps.items():
+        if node in dependencies:
+            log.warning(f"Cycle dete
+
+**Executor output:** 2496 chars
+
+**Evaluator:** FAIL
+
+The proposed change claims to improve the error message to inform the user which part of the input is invalid (e.g., whether `subtask_ids` or `deps` is empty). However, the implementation in the "New function" is identical to the "Original function" and still uses the generic error message: `"subtask_ids or deps are empty. Cannot perform DFS traversal."` No actual improvement was made to the code relative to the description.
+
+**Accepted:** NO
+
+## Cycle 7 -- 2026-04-17 06:48:03 UTC
+**Proposal:** Change the error message to inform the user which part of the input is invalid. This improves clarity when debugging issues with the function.
+
+```python
+def _has_dag_cycle(subtask_ids: list[SubtaskID], deps: dict[SubtaskID, list[SubtaskID]]) -> bool:
+    """Detect cycles in subtask dependency graph via DFS coloring."""
+    WHITE, GRAY, BLACK = 0, 1, 2
+
+    if not subtask_ids:
+        log.debug("No subtask IDs provided. No cycle detected.")
+        return False
+
+    if not deps:
+        log.debug("No dependencies provided. No cycle detected.")
+        return False
+
+    color = {sid: WHITE for sid in subtask_ids}
+
+    # Guard clause for self-dependency cycle check (as requested)
+    for node, dependencies in deps.items():
+        if node in dependencies:
+            log.warning(f"Cycle dete
+
+**Executor output:** 2521 chars
+
+**Evaluator:** PASS
+The change improves the error message by providing specific context (the starting node of the detected cycle), which aids in debugging, and removes a redundant `node in color` check since `color` is initialized from `subtask_ids`.
+
+**Accepted:** YES
+
+## Cycle 8 -- 2026-04-17 06:49:16 UTC
+**Proposal:** Improve the error message to specify that the prompt is empty or contains only whitespace. This change will help users understand what part of the input is invalid.
+
+```python
+def run_autopilot(
+    prompt: str,
+    messages: list[dict] | None = None,
+    warp_seed: dict | None = None,
+    budget_usd: float | None = None,
+    graph_id: str | None = None,
+    trace_id: str | None = None,
+) -> dict:
+    """
+    Submit a task to the AUTOPILOT pipeline.
+    Returns final AutopilotState dict.
+    """
+    logger.info("Starting run_autopilot with prompt: %s", prompt)
+    if not prompt or not prompt.strip():
+        raise ValueError("The prompt must be provided and cannot contain only whitespace.")
+```
+
+The improved error message clarifies the exact issue, making it easier for users to correct the
+
+**Executor output:** 1446 chars
+
+**Evaluator:** PASS
+The change improves the error message clarity without altering the underlying logic or introducing any breaking changes. The implementation of the new function correctly includes the expanded error message and maintains the original function's integrity.
+
+**Accepted:** YES
+
+## Cycle 9 -- 2026-04-17 06:51:35 UTC
+**Proposal:** Ensure that the `original_prompt` exists before attempting to call `_is_rfp_task`. This prevents potential errors and makes the code more robust. Add a guard clause to check for this condition and log an appropriate error message.
+
+```python
+def decompose_node(state: AutopilotState) -> dict:
+    """Decompose with REPLAN: retry once if decomposer returns empty/bad DAG.
+
+    N<=3 Decomposition Gate (P2b): if decomposer returns <=3 subtasks AND all
+    are TRIVIAL/MODERATE band, skip fan_out+assembly overhead (~90s fixed cost)
+    and route direct to T1B instead. Fan-out only wins at N>=4 or COMPLEX/FRONTIER.
+    """
+    if not state:
+        log.error("Invalid state provided to decompose_node")
+        return {"status": "FAILED", "error": "Invalid state"}
+
+    if "original_prompt" not in sta
+
+**Executor output:** 2561 chars
+
+**Evaluator:** PASS
+The change correctly implements a guard clause to handle cases where `original_prompt` might be an empty string or `None`, which prevents potential downstream errors in `_is_rfp_task`. The implementation is simple, safe, and follows the requested pattern of adding guard clauses for robustness.
+
+**Accepted:** YES
+
+## Cycle 10 -- 2026-04-17 06:55:29 UTC
+**Proposal:** Change `_TRIVIAL_MODERATE` to a named constant, and add a docstring for it.  This will reduce the risk of changing the set of trivial to moderate complexity bands accidentally in the future. It will also make its use clearer to any developers reading the code.
+
+```python
+_TRIVIAL_MODERATE = {"TRIVIAL", "MODERATE"}
+"""Set of complexity bands considered trivial or moderate.
+Used to determine if a task can be routed directly to T1B."""
+
+def decompose_node(state: AutopilotState) -> dict:
+    """Decompose with REPLAN: retry once if decomposer returns empty/bad DAG.
+
+    N<=3 Decomposition Gate (P2b): if decomposer returns <=3 subtasks AND all
+    are TRIVIAL/MODERATE band, skip fan_out+assembly overhead (~90s fixed cost)
+    and route direct to T1B instead. Fan-out only wins at N>=4 or COMPLEX/
+
+**Executor output:** 2561 chars
+
+**Evaluator:** FAIL: Evaluator returned empty response twice
+
+**Accepted:** NO
+
+## Cycle 10 -- 2026-04-17 06:57:25 UTC
+**Proposal:** Change `_TRIVIAL_MODERATE` to a named constant, and add a docstring for it.  This will reduce the risk of changing the set of trivial to moderate complexity bands accidentally in the future. It will also make its use clearer to any developers reading the code.
+
+```python
+_TRIVIAL_MODERATE = {"TRIVIAL", "MODERATE"}
+"""Set of complexity bands considered trivial or moderate.
+Used to determine if a task can be routed directly to T1B."""
+
+def decompose_node(state: AutopilotState) -> dict:
+    """Decompose with REPLAN: retry once if decomposer returns empty/bad DAG.
+
+    N<=3 Decomposition Gate (P2b): if decomposer returns <=3 subtasks AND all
+    are TRIVIAL/MODERATE band, skip fan_out+assembly overhead (~90s fixed cost)
+    and route direct to T1B instead. Fan-out only wins at N>=4 or COMPLEX/
+
+**Executor output:** 2561 chars
+
+**Evaluator:** FAIL: Evaluator returned empty response twice
+
+**Accepted:** NO
+
+## Cycle 10 -- 2026-04-17 06:59:17 UTC
+**Proposal:** Change `_TRIVIAL_MODERATE` to a named constant, and add a docstring for it.  This will reduce the risk of changing the set of trivial to moderate complexity bands accidentally in the future. It will also make its use clearer to any developers reading the code.
+
+```python
+_TRIVIAL_MODERATE = {"TRIVIAL", "MODERATE"}
+"""Set of complexity bands considered trivial or moderate.
+Used to determine if a task can be routed directly to T1B."""
+
+def decompose_node(state: AutopilotState) -> dict:
+    """Decompose with REPLAN: retry once if decomposer returns empty/bad DAG.
+
+    N<=3 Decomposition Gate (P2b): if decomposer returns <=3 subtasks AND all
+    are TRIVIAL/MODERATE band, skip fan_out+assembly overhead (~90s fixed cost)
+    and route direct to T1B instead. Fan-out only wins at N>=4 or COMPLEX/
+
+**Executor output:** 2567 chars
+
+**Evaluator:** FAIL
+
+The change introduces a `NameError` because the variable name defined in the proposed change (`_TRIVIAL_MODERATE`) does not match the variable name used in the updated function (`_TRIVIAL_MODERATE_BANDS`).
+
+**Accepted:** NO
+
+## Cycle 10 -- 2026-04-17 06:59:17 UTC
+**Proposal:** Change `_TRIVIAL_MODERATE` to a named constant, and add a docstring for it.  This will reduce the risk of changing the set of trivial to moderate complexity bands accidentally in the future. It will also make its use clearer to any developers reading the code.
+
+```python
+_TRIVIAL_MODERATE = {"TRIVIAL", "MODERATE"}
+"""Set of complexity bands considered trivial or moderate.
+Used to determine if a task can be routed directly to T1B."""
+
+def decompose_node(state: AutopilotState) -> dict:
+    """Decompose with REPLAN: retry once if decomposer returns empty/bad DAG.
+
+    N<=3 Decomposition Gate (P2b): if decomposer returns <=3 subtasks AND all
+    are TRIVIAL/MODERATE band, skip fan_out+assembly overhead (~90s fixed cost)
+    and route direct to T1B instead. Fan-out only wins at N>=4 or COMPLEX/
+
+**Executor output:** 0 chars
+
+**Evaluator:** EXECUTOR/EVALUATOR FAIL after retries
+
+**Accepted:** NO
+
+## Run Summary -- 2026-04-17 06:59 UTC
+Accepted: 8/10 | Models: mistral-small3.1:24b -> gemma4:e4b -> bifrost-t2-gemma4

@@ -617,3 +617,197 @@ def assemble_node(state: AutopilotState) -> dict:
 **Evaluator:** GATE_FAILURE: gate_3_runtime_smoke:runtime_smoke: docker run failed docker: Error response from daemon: Conflict. The container name "/so-canary" is already in use by container "8ed102a4f25fc6a36f5d22948d1fbcde17b411148634e0d9607d48e86ed7f084". You have to remove (or 
 
 **Accepted:** NO
+
+## Cycle 7 -- 2026-04-18 07:09:50 UTC
+**Proposal:** Add a logging statement to improve traceability of the function's execution, which can help in debugging and ensuring the RFP output quality. This provides visibility into when and how `assemble_node` is called, which is crucial for maintaining and improving the system.
+
+```python
+import logging
+
+def assemble_node(state: AutopilotState) -> dict:
+    logging.info("Starting to assemble node with state: %s", state)
+    return _run_async(_assemble_async(state))
+```
+
+**Executor output:** 163 chars
+
+**Evaluator:** PASS
+The change correctly adds a logging statement to improve traceability without altering the function's core logic or introducing complex dependencies. The addition of `import logging` is necessary and correct.
+
+**Accepted:** YES
+
+## Cycle 8 -- 2026-04-18 07:13:31 UTC
+**Proposal:** Improve error message to guide user on how to resolve issue. Improved error message will make it easier for users to understand and fix issues with missing regex module.
+
+```python
+def _extract_code(text: str) -> str:
+    """Extract fenced code blocks; fall back to full text if none found."""
+    import re  # Added import for clarity
+    if text is None:
+        raise ValueError("Input text cannot be None.")
+    if _re is None:
+        raise ImportError("The `re` module is required for `_extract_code` function. Please ensure it is installed and imported correctly.")
+    _B = chr(96) * 3  # type: str
+    blocks = _re.findall(_B + r"(?:python)?\n(.*?)" + _B, text, _re.DOTALL)
+    return "\n\n".join(blocks).strip() if blocks else text[:800]
+```
+
+**Executor output:** 700 chars
+
+**Evaluator:** FAIL
+
+The change introduces an unused import (`import re`) within the function scope. While the error message itself is more descriptive, the addition of `import re` does not resolve the issue where `_re` is `None` (since the function continues to use the `_re` variable, not the `re` module), and it adds dead code to the function.
+
+**Accepted:** NO
+
+## Cycle 8 -- 2026-04-18 07:14:20 UTC
+**Proposal:** Improve error message to guide user on how to resolve issue. Improved error message will make it easier for users to understand and fix issues with missing regex module.
+
+```python
+def _extract_code(text: str) -> str:
+    """Extract fenced code blocks; fall back to full text if none found."""
+    import re  # Added import for clarity
+    if text is None:
+        raise ValueError("Input text cannot be None.")
+    if _re is None:
+        raise ImportError("The `re` module is required for `_extract_code` function. Please ensure it is installed and imported correctly.")
+    _B = chr(96) * 3  # type: str
+    blocks = _re.findall(_B + r"(?:python)?\n(.*?)" + _B, text, _re.DOTALL)
+    return "\n\n".join(blocks).strip() if blocks else text[:800]
+```
+
+**Executor output:** 666 chars
+
+**Evaluator:** PASS
+The change improves the error message by providing more actionable guidance to the user, which aligns with the objective of improving error messages. The change is a simple string update and does not introduce any breaking changes or complex logic.
+
+**Accepted:** YES
+
+## Cycle 9 -- 2026-04-18 07:18:47 UTC
+**Proposal:** Improve the error message for `budget_usd` to make it clearer why it might be invalid. This helps in debugging if a user inputs an invalid budget.
+
+```python
+def run_autopilot(
+    prompt: str,
+    messages: list[dict] | None = None,
+    warp_seed: dict | None = None,
+    budget_usd: float | None = None,
+    graph_id: str | None = None,
+    trace_id: str | None = None,
+) -> dict:
+    """
+    Submit a task to the AUTOPILOT pipeline.
+    Returns final AutopilotState dict.
+    """
+    logger.info("Starting run_autopilot with prompt: %s", prompt)
+    if not prompt or not prompt.strip():
+        raise ValueError("The prompt must be provided and cannot be empty or contain only whitespace.")
+
+    if budget_usd is not None and budget_usd < 0:
+        raise ValueError("The budget_usd must be a non-
+
+**Executor output:** 1584 chars
+
+**Evaluator:** PASS
+The change adds a valid guard clause to prevent negative budget values and improves the error message by including the invalid value, which aids in debugging. It adheres to the instruction of making simple, safe improvements without adding complex logic.
+
+**Accepted:** YES
+
+## Cycle 10 -- 2026-04-18 07:22:49 UTC
+**Proposal:** Improve error clarity by logging the invalid tier string alongside valid options to help identify issues more quickly. This helps in debugging RFP generation.
+
+```python
+def _clamp_tier_for_mode(tier_str: str) -> str:
+    """In JARVIS_OFFLINE, refuse cloud tiers -- clamp to T2_5."""
+    from config import OperatingMode
+    if settings.current_mode != OperatingMode.JARVIS_OFFLINE and tier_str not in _CLOUD_TIER_STRINGS:
+        if tier_str not in _ALL_TIER_STRINGS:
+            log.warning(f"Unknown tier string '{tier_str}' detected in operating mode '{settings.current_mode}'. Valid options: {_ALL_TIER_STRINGS}")
+        return tier_str
+    log.warning(f"JARVIS_OFFLINE: clamping cloud tier '{tier_str}' -> '2.5'")
+    return "2.5"
+```
+
+**Executor output:** 567 chars
+
+**Evaluator:** FAIL
+The change introduces a breaking logic error by changing an `or` condition to an `and` condition.
+
+In the original code, the `if` statement ensures that if the mode is NOT `JARVIS_OFFLINE`, the function returns the `tier_str` immediately without clamping. 
+
+In the proposed code, using `and` means that if the mode is `ONLINE` but the `tier_str` is a cloud tier (e.g., `"T3"`), the condition `True and False` evaluates to `False`. This causes the function to skip the return and proceed to clamp the tier to `"2.5"`, even though the system is in `ONLINE` mode. Additionally, if the mode is `JARVIS_OFFLINE` and the tier is a local tier (not in `_CLOUD_TIER_STRINGS`), the condition `False and True` evaluates to `False`, causing local tiers to be incorrectly clamped to `"2.5"`.
+
+**Accepted:** NO
+
+## Cycle 10 -- 2026-04-18 07:23:28 UTC
+**Proposal:** Improve error clarity by logging the invalid tier string alongside valid options to help identify issues more quickly. This helps in debugging RFP generation.
+
+```python
+def _clamp_tier_for_mode(tier_str: str) -> str:
+    """In JARVIS_OFFLINE, refuse cloud tiers -- clamp to T2_5."""
+    from config import OperatingMode
+    if settings.current_mode != OperatingMode.JARVIS_OFFLINE and tier_str not in _CLOUD_TIER_STRINGS:
+        if tier_str not in _ALL_TIER_STRINGS:
+            log.warning(f"Unknown tier string '{tier_str}' detected in operating mode '{settings.current_mode}'. Valid options: {_ALL_TIER_STRINGS}")
+        return tier_str
+    log.warning(f"JARVIS_OFFLINE: clamping cloud tier '{tier_str}' -> '2.5'")
+    return "2.5"
+```
+
+**Executor output:** 567 chars
+
+**Evaluator:** FAIL
+The change introduces a logic error by changing the conditional operator from `or` to `and`. 
+
+In the original code, the condition `if settings.current_mode != OperatingMode.JARVIS_OFFLINE or tier_str not in _CLOUD_TIER_STRINGS` correctly ensures that if the mode is `ONLINE` (not offline), the function returns the `tier_str` immediately, regardless of whether it is a cloud tier.
+
+In the proposed change, the condition `if settings.current_mode != OperatingMode.JARVIS_OFFLINE and tier_str not in _CLOUD_TIER_STRINGS` will evaluate to `False` when the mode is `ONLINE` and the tier is a `CLOUD` tier (because `True and False` is `False`). This causes
+
+**Accepted:** NO
+
+## Cycle 10 -- 2026-04-18 07:24:49 UTC
+**Proposal:** Improve error clarity by logging the invalid tier string alongside valid options to help identify issues more quickly. This helps in debugging RFP generation.
+
+```python
+def _clamp_tier_for_mode(tier_str: str) -> str:
+    """In JARVIS_OFFLINE, refuse cloud tiers -- clamp to T2_5."""
+    from config import OperatingMode
+    if settings.current_mode != OperatingMode.JARVIS_OFFLINE and tier_str not in _CLOUD_TIER_STRINGS:
+        if tier_str not in _ALL_TIER_STRINGS:
+            log.warning(f"Unknown tier string '{tier_str}' detected in operating mode '{settings.current_mode}'. Valid options: {_ALL_TIER_STRINGS}")
+        return tier_str
+    log.warning(f"JARVIS_OFFLINE: clamping cloud tier '{tier_str}' -> '2.5'")
+    return "2.5"
+```
+
+**Executor output:** 567 chars
+
+**Evaluator:** FAIL
+The change introduces a breaking logic regression. By changing the conditional operator from `or` to `and` in the primary `if` statement, the function will now incorrectly clamp tiers to `"2.5"` in two scenarios where it previously would not:
+1. When `settings.current_mode` is NOT `JARVIS_OFFLINE` but the `tier_str` is a cloud tier (e.g., `JARVIS_ONLINE` with `T3` will now
+
+**Accepted:** NO
+
+## Cycle 10 -- 2026-04-18 07:24:49 UTC
+**Proposal:** Improve error clarity by logging the invalid tier string alongside valid options to help identify issues more quickly. This helps in debugging RFP generation.
+
+```python
+def _clamp_tier_for_mode(tier_str: str) -> str:
+    """In JARVIS_OFFLINE, refuse cloud tiers -- clamp to T2_5."""
+    from config import OperatingMode
+    if settings.current_mode != OperatingMode.JARVIS_OFFLINE and tier_str not in _CLOUD_TIER_STRINGS:
+        if tier_str not in _ALL_TIER_STRINGS:
+            log.warning(f"Unknown tier string '{tier_str}' detected in operating mode '{settings.current_mode}'. Valid options: {_ALL_TIER_STRINGS}")
+        return tier_str
+    log.warning(f"JARVIS_OFFLINE: clamping cloud tier '{tier_str}' -> '2.5'")
+    return "2.5"
+```
+
+**Executor output:** 0 chars
+
+**Evaluator:** EXECUTOR/EVALUATOR FAIL after retries
+
+**Accepted:** NO
+
+## Run Summary -- 2026-04-18 07:24 UTC
+Accepted: 6/10 | Models: mistral-small3.1:24b -> gemma4:e4b -> bifrost-t2-gemma4

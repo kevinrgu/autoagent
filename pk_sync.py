@@ -47,18 +47,20 @@ def sync():
     else:
         print("  (none found)")
 
-    # 2. Per-profile decisions.md
-    print("\n[2] Profile decisions.md")
+    # 2. Per-profile decisions files (glob timestamped + rolling)
+    print("\n[2] Profile decisions files (glob)")
     for profile in PROFILES:
-        src = AUTOAGENT_DIR / "profiles" / profile / "decisions.md"
-        if src.exists():
-            dest_name = f"decisions_{profile}.md"
-            shutil.copy2(src, DEST_DIR / dest_name)
-            copied.append(f"profiles/{profile}/decisions.md -> {dest_name}")
-            print(f"  [OK] profiles/{profile}/decisions.md -> {dest_name}")
-        else:
-            skipped.append(str(src))
-            print(f"  [--] profiles/{profile}/decisions.md (not found)")
+        pdir = AUTOAGENT_DIR / "profiles" / profile
+        prefix = f"decisions_{profile.lower()}"
+        matches = sorted(pdir.glob(f"{prefix}*.md")) if pdir.exists() else []
+        if not matches:
+            skipped.append(str(pdir / f"{prefix}*.md"))
+            print(f"  [--] profiles/{profile}/{prefix}*.md (none found)")
+            continue
+        for src in matches:
+            shutil.copy2(src, DEST_DIR / src.name)
+            copied.append(f"profiles/{profile}/{src.name}")
+            print(f"  [OK] profiles/{profile}/{src.name}")
 
     # 3. autoagent root files
     print("\n[3] autoagent root files")

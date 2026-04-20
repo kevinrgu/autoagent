@@ -3,36 +3,83 @@
     "coding": {
       "description": "Code quality, correctness, structure improvements",
       "objective": "Improve the BIFROST AUTOPILOT pipeline. Focus on SIMPLE changes only: add logging statements, add guard clauses, improve error messages, add type hints, add docstrings, fix edge cases with simple if-checks. Do NOT add retry logic, threading, timeouts, or complex control flow. One small, safe single-function change per cycle.",
-      "proposer": {"model": "mistral-small3.1:24b", "url": "http://192.168.2.33:11434/v1/chat/completions"},
-      "executor": {"model": "mistral-7b-v0.3", "url": "http://192.168.2.4:11437/v1/chat/completions"},
-      "evaluator": {"model": "bifrost-t2-gemma4", "url": "http://192.168.2.50:11434/v1/chat/completions"},
-      "targets": ["D:\\Projects\\bifrost-router\\autopilot_graph.py", "D:\\Projects\\bifrost-router\\subtask_graph.py"],
+      "proposer": {
+        "model": "mistral-small3.1:24b",
+        "url": "http://192.168.2.33:11434/v1/chat/completions"
+      },
+      "executor": {
+        "model": "mistral:7b-instruct-v0.3",
+        "url": "http://192.168.2.33:11434/v1/chat/completions"
+      },
+      "evaluator": {
+        "model": "bifrost-t2-gemma4",
+        "url": "http://192.168.2.50:11434/v1/chat/completions"
+      },
+      "targets": [
+        "D:\\Projects\\bifrost-router\\autopilot_graph.py",
+        "D:\\Projects\\bifrost-router\\subtask_graph.py"
+      ],
       "system_rules": "CRITICAL CODE RULES:\n- All LangGraph node functions are SYNC (def, not async def)\n- To call async functions from sync context, use: _run_async(async_coroutine)\n- NEVER use raw 'await' in a sync def -- always wrap with _run_async()\n- The _run_async() helper already exists in the file\n- Check the function signatures below to know which functions are async vs sync\n- Do NOT propose changes that only restructure async/await patterns\n- Do NOT add new imports or dependencies\n- Keep changes minimal — one function, one improvement",
-      "evaluator_prompt_extra": "Focus on correctness, not style. PASS if the change is functionally correct, passes syntax check, and doesn't break existing behavior — even if you'd write it differently. Reject only for actual bugs, missing imports, type errors, or logic regressions.",
+      "evaluator_prompt_extra": "Focus on correctness, not style. PASS if the change is functionally correct, passes syntax check, and does not break existing behavior. Reject for actual bugs, missing imports, type errors, or logic regressions.\n\nALSO REJECT if the change adds provably-unreachable code, redundant conditional branches, or duplicate guard clauses for conditions already handled earlier in the same function. Dead code is a quality regression even when harmless -- if you find yourself noting that a block is unreachable, that is a REJECT signal, not a PASS-with-caveat.\n\nALSO REJECT if the change introduces a compound conditional where one branch strictly subsumes the other. Examples that must be REJECTED:\n  - `X is None or not X`  (not X already covers the None case)\n  - `not X or X is None`  (same, reversed)\n  - `X == None or len(X) == 0`  (not X covers both)\nIf you observe that one condition makes the other unreachable, that is a REJECT -- do not PASS-with-caveat.",
       "num_ctx": 32768
     },
     "general": {
       "description": "RFP and prose output quality improvements",
       "objective": "Improve RFP output quality. Focus on SIMPLE changes only: add logging, add guard clauses, improve error messages, add type hints, add docstrings, fix edge cases with simple if-checks. Do NOT add complex control flow, threading, or retry logic. One small, safe single-function change per cycle.",
-      "proposer": {"model": "mistral-small3.1:24b", "url": "http://192.168.2.33:11434/v1/chat/completions"},
-      "executor": {"model": "gemma4:e4b", "url": "http://192.168.2.33:11434/v1/chat/completions"},
-      "evaluator": {"model": "bifrost-t2-gemma4", "url": "http://192.168.2.50:11434/v1/chat/completions"},
-      "targets": ["D:\\Projects\\bifrost-router\\autopilot_graph.py"],
-      "focus_functions": ["_is_rfp_task", "_build_rfp_dag"],
+      "proposer": {
+        "model": "mistral-small3.1:24b",
+        "url": "http://192.168.2.33:11434/v1/chat/completions"
+      },
+      "executor": {
+        "model": "gemma4:e4b",
+        "url": "http://192.168.2.33:11434/v1/chat/completions"
+      },
+      "evaluator": {
+        "model": "bifrost-t2-gemma4",
+        "url": "http://192.168.2.50:11434/v1/chat/completions"
+      },
+      "targets": [
+        "D:\\Projects\\bifrost-router\\autopilot_graph.py"
+      ],
+      "focus_functions": [
+        "_is_rfp_task",
+        "_build_rfp_dag"
+      ],
       "system_rules": "Focus on RFP output quality: section completeness, prose clarity, requirement coverage. Evaluate whether changes improve the quality of generated RFP responses.",
       "num_ctx": 32768
     },
     "research": {
       "description": "Long-context synthesis, research pipeline improvements",
       "objective": "Improve one function in the research pipeline. Focus on SIMPLE changes only: add logging, add guard clauses, improve error messages, add type hints, add docstrings. Do NOT change return types, add threading, or add complex control flow. One small, safe single-function change per cycle.",
-      "proposer": {"model": "mistral-small3.1:24b", "url": "http://192.168.2.33:11434/v1/chat/completions"},
-      "executor": {"model": "gemma4:e4b", "url": "http://192.168.2.33:11434/v1/chat/completions"},
-      "evaluator": {"model": "bifrost-t2-gemma4", "url": "http://192.168.2.50:11434/v1/chat/completions"},
-      "targets": ["D:\\Projects\\bifrost-router\\subtask_graph.py"],
+      "proposer": {
+        "model": "mistral-small3.1:24b",
+        "url": "http://192.168.2.33:11434/v1/chat/completions"
+      },
+      "executor": {
+        "model": "gemma4:e4b",
+        "url": "http://192.168.2.33:11434/v1/chat/completions"
+      },
+      "evaluator": {
+        "model": "bifrost-t2-gemma4",
+        "url": "http://192.168.2.50:11434/v1/chat/completions"
+      },
+      "targets": [
+        "D:\\Projects\\bifrost-router\\subtask_graph.py"
+      ],
       "system_rules": "Focus on research pipeline quality: long-context handling, source synthesis, citation accuracy. Evaluate whether changes improve research output depth and correctness.\n- Do NOT add new imports or dependencies\n- Keep changes minimal — one function, one improvement",
       "temperature": 0.9,
       "num_ctx": 32768
     }
   },
-  "active": "coding"
+  "active": "coding",
+  "_changelog": [
+    {
+      "date": "2026-04-20T21:26:47Z",
+      "change": "evaluator_prompt_extra iteration #2: embedded redundancy rejection rules"
+    },
+    {
+      "date": "2026-04-18",
+      "change": "Tightened CODING evaluator_prompt_extra to reject provably-unreachable code and redundant guards. Triggered by cycle 18 acceptance of dead code in direct_route_node."
+    }
+  ]
 }

@@ -64,7 +64,7 @@ def sync():
 
     # 3. autoagent root files
     print("\n[3] autoagent root files")
-    for fname in ["active_profile.txt", "profiles.json"]:
+    for fname in ["active_profile.txt", "profiles.json", "architect.py"]:
         copy_file(AUTOAGENT_DIR / fname, fname)
 
     # 4. bifrost-router files

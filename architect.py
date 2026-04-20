@@ -1,11 +1,13 @@
 """
 architect.py — BIFROST ARCHITECT-0
-Daily read-only fleet health + drift detection + recommendations.
+Daily fleet health + drift detection + recommendations.
 Writes ARCHITECT_REPORT_{date}.md to pk-upload staging dir.
 Run after morning_report.py (06:30 Scheduled Task).
 
-SAFETY: This script is READ-ONLY. It must never write to config files,
-enable/disable tasks, pull models, or commit to any repo.
+SAFETY: Read-only with ONE scoped maintenance action -- when Ollama version drift
+is detected on any node, architect calls update_ollama.py to upgrade in place.
+Model files, config, and Scheduled Tasks are never modified. All actions are
+logged to L:\\temp\\pk-upload\\OLLAMA_UPDATE_LOG.md.
 """
 
 import json
@@ -16,6 +18,11 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import requests
+
+try:
+    import update_ollama  # co-located in autoagent dir
+except Exception as _e:  # noqa: BLE001 - optional dep
+    update_ollama = None
 
 # -- Paths ---------------------------------------------------------------------
 AUTOAGENT_DIR  = Path(r"C:\Users\jhpri\projects\autoagent")
@@ -548,14 +555,31 @@ def generate_recommendations(results: dict) -> list[dict]:
                 f"Cannot verify model inventory on node '{m['node']}' (unreachable)",
                 "models"))
 
-    # Ollama version drift
+    # Ollama version drift. If an auto-update ran, results["ollama_update_attempt"]
+    # holds the updater's per-node result list; use it to choose GREEN vs YELLOW.
     oll = results.get("ollama") or {}
+    attempt = results.get("ollama_update_attempt") or []
+    attempt_by_node = {r.get("node"): r for r in attempt if isinstance(r, dict)}
+
     for node in ("bifrost", "hearth", "forge"):
         info = oll.get(node) or {}
-        if info.get("behind"):
+        upd = attempt_by_node.get(node)
+        if upd and upd.get("ok") and not upd.get("skipped"):
+            recs.append(_rec("GREEN",
+                f"Auto-updated {node.title()} Ollama: "
+                f"{upd.get('old_version')} -> {upd.get('new_version')}",
+                "ollama"))
+        elif upd and not upd.get("ok"):
+            recs.append(_rec("YELLOW",
+                f"{node.title()} Ollama auto-update failed "
+                f"({upd.get('old_version')} -> {upd.get('new_version')}) -- "
+                f"check OLLAMA_UPDATE_LOG.md",
+                "ollama"))
+        elif info.get("behind"):
             recs.append(_rec("YELLOW",
                 f"{node.title()} Ollama is behind "
-                f"({info.get('installed')} -> {info.get('latest')}) — schedule update window",
+                f"({info.get('installed')} -> {info.get('latest')}) -- "
+                f"update_ollama unavailable; schedule update window",
                 "ollama"))
 
     # pk_sync staleness
@@ -744,7 +768,7 @@ def write_report(results: dict, recommendations: list[dict], errors: dict) -> Pa
     sections += [
         "",
         "---",
-        "*ARCHITECT-0 is read-only. All recommendations require human action.*",
+        "*ARCHITECT-0 is read-only except for scoped Ollama auto-updates (see OLLAMA_UPDATE_LOG.md).*",
         "",
     ]
 
@@ -780,6 +804,27 @@ def main() -> int:
         else:
             results[name] = data
             print(f"  [OK] {name}")
+
+    # ARCHITECT-0's one maintenance action: auto-update Ollama when behind.
+    # Model files and config are untouched; full log at OLLAMA_UPDATE_LOG.md.
+    oll = results.get("ollama") or {}
+    behind_nodes = [n for n in ("forge", "bifrost", "hearth")
+                    if isinstance(oll.get(n), dict) and oll[n].get("behind") is True]
+    if behind_nodes and update_ollama is not None:
+        print(f"  [..] ollama_update_attempt nodes={behind_nodes}")
+        attempt, att_err = _safe(update_ollama.main_programmatic, behind_nodes, False)
+        if att_err:
+            errors["ollama_update_attempt"] = att_err
+            print(f"  [!!] ollama_update_attempt: {att_err}")
+        else:
+            results["ollama_update_attempt"] = attempt
+            # Re-collect post-update versions so the report reflects new state
+            post, post_err = _safe(collect_ollama_versions)
+            if not post_err:
+                results["ollama"] = post
+            print(f"  [OK] ollama_update_attempt: {len(attempt)} node(s) processed")
+    elif behind_nodes and update_ollama is None:
+        errors["ollama_update_attempt"] = "update_ollama module not importable"
 
     results["generated_at"] = datetime.now(timezone.utc).isoformat()
 

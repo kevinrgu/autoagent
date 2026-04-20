@@ -48,9 +48,72 @@ def _run(cmd: list[str], timeout: int = 120) -> subprocess.CompletedProcess:
     )
 
 
-def _parse_version(text: str) -> str:
-    m = re.search(r"ollama version is\s+(\S+)", text or "")
-    return m.group(1) if m else "unknown"
+def _parse_ollama_version(output: str) -> str:
+    """Parse `ollama --version` output. Prefer the 'client version' line when
+    present -- that's the post-install state where the server is still warming
+    up and the old server version would otherwise be reported. Falls back to
+    the 'ollama version is X' line.
+    """
+    for line in (output or "").splitlines():
+        s = line.strip().lower()
+        if "client version" in s:
+            parts = s.split("is")
+            if len(parts) >= 2:
+                return parts[-1].strip()
+    for line in (output or "").splitlines():
+        s = line.strip().lower()
+        if s.startswith("ollama version"):
+            parts = s.split("is")
+            if len(parts) >= 2:
+                return parts[-1].strip()
+    return "unknown"
+
+
+# Backwards-compat alias: callers used _parse_version before.
+_parse_version = _parse_ollama_version
+
+
+def _get_bifrost_version() -> str:
+    """Bifrost version check with API fallback. If `ollama --version` returns
+    nothing useful (tray app running without stdout, or binary locked), query
+    the server API at http://localhost:11434/api/version.
+    """
+    try:
+        r = subprocess.run(
+            [BIFROST_OLLAMA, "--version"],
+            capture_output=True, text=True, timeout=10,
+            encoding="utf-8", errors="replace",
+        )
+        v = _parse_ollama_version(r.stdout + r.stderr)
+        if v and v != "unknown":
+            return v
+    except Exception:
+        pass
+    try:
+        resp = requests.get("http://localhost:11434/api/version", timeout=5)
+        if resp.status_code == 200:
+            return resp.json().get("version", "unknown")
+    except Exception:
+        pass
+    return "unknown"
+
+
+def _refresh_version_cache(node: str, new_version: str) -> None:
+    """Update the cached installed version for a node after a successful update.
+    Prevents the next ARCHITECT run from reading stale data and retrying."""
+    try:
+        cache: dict = {}
+        if VERSION_CACHE.exists():
+            try:
+                cache = json.loads(VERSION_CACHE.read_text(encoding="utf-8"))
+            except Exception:
+                cache = {}
+        cache[f"installed_{node}"] = new_version
+        cache["ts_installed"] = datetime.now(timezone.utc).isoformat()
+        VERSION_CACHE.parent.mkdir(parents=True, exist_ok=True)
+        VERSION_CACHE.write_text(json.dumps(cache, indent=2), encoding="utf-8")
+    except Exception as e:
+        _log_line(f"  cache refresh failed (non-fatal): {e}")
 
 
 def _log_line(msg: str) -> None:
@@ -82,8 +145,16 @@ def get_latest_version() -> str:
         tag = (r.json().get("tag_name") or "").lstrip("v")
         if tag:
             VERSION_CACHE.parent.mkdir(parents=True, exist_ok=True)
+            existing: dict = {}
+            if VERSION_CACHE.exists():
+                try:
+                    existing = json.loads(VERSION_CACHE.read_text(encoding="utf-8"))
+                except Exception:
+                    existing = {}
+            existing["ts"] = now.isoformat()
+            existing["latest"] = tag
             VERSION_CACHE.write_text(
-                json.dumps({"ts": now.isoformat(), "latest": tag}),
+                json.dumps(existing, indent=2),
                 encoding="utf-8",
             )
             return tag
@@ -94,16 +165,16 @@ def get_latest_version() -> str:
 
 
 def get_installed_version(node: str) -> str:
+    if node == "bifrost":
+        return _get_bifrost_version()
     try:
-        if node == "bifrost":
-            r = _run([BIFROST_OLLAMA, "--version"], timeout=10)
-        elif node == "hearth":
+        if node == "hearth":
             r = _run(["ssh", HEARTH_SSH, "ollama --version"], timeout=15)
         elif node == "forge":
             r = _run(["ssh", FORGE_SSH, "ollama --version"], timeout=15)
         else:
             return "unknown"
-        return _parse_version(r.stdout + r.stderr)
+        return _parse_ollama_version(r.stdout + r.stderr)
     except Exception as e:
         _log_line(f"get_installed_version({node}) failed: {e}")
         return "unknown"
@@ -206,7 +277,10 @@ def update_bifrost(latest: str, dry_run: bool) -> dict:
         return result
 
     if dry_run:
-        result["notes"].append(f"DRY RUN: would download {INSTALLER_URL} and run /S /D={BIFROST_INSTALL_DIR}")
+        result["notes"].append(
+            f"DRY RUN: would download {INSTALLER_URL}, trigger "
+            f"BIFROST-Ollama-Restart after install /VERYSILENT /DIR={BIFROST_INSTALL_DIR}"
+        )
         result["ok"] = True
         result["skipped"] = True
         return result
@@ -215,18 +289,11 @@ def update_bifrost(latest: str, dry_run: bool) -> dict:
         result["notes"].append("ABORT: installer download failed")
         return result
 
-    _log_line("  stopping local ollama processes (server, runners, tray app)")
-    # Ollama's Inno Setup installer is Inno Setup, not NSIS. The main binary is
-    # 'ollama.exe', the tray app is 'ollama app.exe', and the model server spawns
-    # child 'ollama' runners. All must exit before the installer can overwrite.
-    _run(["taskkill", "/F", "/IM", "ollama app.exe"], timeout=15)
-    _run(["taskkill", "/F", "/IM", "ollama.exe"], timeout=15)
-    time.sleep(3)
-
     _log_line(f"  running installer: {INSTALLER_PATH} /VERYSILENT /DIR={BIFROST_INSTALL_DIR}")
     # Ollama installer is Inno Setup (unins000.exe pattern confirms it).
-    # /VERYSILENT + /SUPPRESSMSGBOXES for no-UI install. /CLOSEAPPLICATIONS as belt-
-    # and-suspenders. /DIR="..." sets the install directory (quotes allowed).
+    # /VERYSILENT + /SUPPRESSMSGBOXES for no-UI install. /CLOSEAPPLICATIONS +
+    # /RESTARTAPPLICATIONS request Restart Manager to close/relaunch the running
+    # ollama processes. /DIR=... sets the install directory.
     try:
         inst = subprocess.run(
             [str(INSTALLER_PATH),
@@ -240,22 +307,31 @@ def update_bifrost(latest: str, dry_run: bool) -> dict:
         result["notes"].append(f"installer failed: {e}")
         return result
 
-    # Wait for post-install to settle; installer usually relaunches ollama app
+    # After install, trigger the BIFROST-Ollama-Restart Scheduled Task. That task
+    # runs as SYSTEM / RunLevel:Highest, which is required to stop the SYSTEM-owned
+    # ollama.exe processes that a user-session `taskkill` cannot touch. Without
+    # this restart, the newly-installed binary is not loaded.
+    _log_line("  triggering BIFROST-Ollama-Restart Scheduled Task")
+    tr = subprocess.run(
+        ["schtasks", "/Run", "/TN", "BIFROST-Ollama-Restart"],
+        capture_output=True, text=True,
+    )
+    if tr.returncode != 0:
+        result["notes"].append(
+            "restart task failed (is BIFROST-Ollama-Restart registered as "
+            f"SYSTEM/Highest?): {tr.stderr.strip() or tr.stdout.strip()}"
+        )
+        return result
     time.sleep(8)
-
-    # Restart server if not auto-started
-    try:
-        _run([BIFROST_OLLAMA, "--version"], timeout=5)
-    except Exception:
-        pass
-    time.sleep(2)
 
     new = get_installed_version("bifrost")
     after_count = get_model_count("bifrost")
     result["new_version"] = new
     result["model_count_after"] = after_count
     result["ok"] = (new == latest) and (after_count == before_count or before_count == -1)
-    if not result["ok"]:
+    if result["ok"]:
+        _refresh_version_cache("bifrost", new)
+    else:
         result["notes"].append(
             f"verify failed: version {old}->{new} (want {latest}), "
             f"models {before_count}->{after_count}"
@@ -332,7 +408,9 @@ def update_hearth(latest: str, dry_run: bool) -> dict:
     result["new_version"] = new
     result["model_count_after"] = after_count
     result["ok"] = (new == latest) and (after_count == before_count or before_count == -1)
-    if not result["ok"]:
+    if result["ok"]:
+        _refresh_version_cache("hearth", new)
+    else:
         result["notes"].append(
             f"verify failed: version {old}->{new} (want {latest}), "
             f"models {before_count}->{after_count}"
@@ -386,7 +464,9 @@ def update_forge(latest: str, dry_run: bool) -> dict:
     result["new_version"] = new
     result["model_count_after"] = after_count
     result["ok"] = (new == latest) and (after_count == before_count or before_count == -1)
-    if not result["ok"]:
+    if result["ok"]:
+        _refresh_version_cache("forge", new)
+    else:
         result["notes"].append(
             f"verify failed: version {old}->{new} (want {latest}), "
             f"models {before_count}->{after_count}"

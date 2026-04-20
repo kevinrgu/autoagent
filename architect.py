@@ -39,6 +39,8 @@ ROUTER_HEALTH  = "http://192.168.2.4:8089/health"
 FORGE_OLLAMA   = "http://192.168.2.50:11434"
 BIFROST_OLLAMA = "http://192.168.2.33:11434"
 HEARTH_OLLAMA  = "http://192.168.2.4:11434"
+KB_HEALTH_URL  = "http://192.168.2.4:8091/health"
+KB_STATS_URL   = "http://192.168.2.4:8091/stats?project=default"
 
 HEARTH_SSH = "jhpri@192.168.2.4"
 FORGE_SSH  = "jhpritch@192.168.2.50"
@@ -248,11 +250,28 @@ def collect_git_delta() -> dict:
 
 
 def collect_service_health() -> dict:
-    """Router + Ollama (3 nodes) + Forge systemd services."""
+    """Router + bifrost-kb + Ollama (3 nodes) + Forge systemd services."""
     health: dict[str, dict] = {}
 
     ok, data = _get(ROUTER_HEALTH)
     health["router"] = {"status": "green" if ok else "red", "detail": data}
+
+    # bifrost-kb -- RAG enrichment service on Hearth k3d :8091
+    kb_ok, kb_data = _get(KB_HEALTH_URL)
+    if kb_ok:
+        stats_ok, stats_data = _get(KB_STATS_URL)
+        if stats_ok and isinstance(stats_data, dict):
+            active = stats_data.get("active_project") or {}
+            chunks = active.get("chunks", "?")
+            docs = len(active.get("documents") or [])
+            proj_count = len(stats_data.get("projects") or [])
+            note = f"{chunks} chunks, {docs} docs, {proj_count} projects"
+        else:
+            note = "stats unavailable"
+        health["bifrost_kb"] = {"status": "green", "ok": True, "note": note}
+    else:
+        health["bifrost_kb"] = {"status": "red", "ok": False,
+                                 "note": str(kb_data)[:120]}
 
     for label, url in (
         ("ollama_bifrost", BIFROST_OLLAMA),
@@ -488,11 +507,25 @@ def generate_recommendations(results: dict) -> list[dict]:
             elif st == "NOT_FOUND":
                 recs.append(_rec("YELLOW", f"Scheduled Task '{name}' not registered on this machine", "tasks"))
 
-    # Overnight window
+    # Overnight window. If both Scheduled Tasks are Ready, the missed window is
+    # likely a just-re-enabled grace period rather than a real outage -- downgrade
+    # to YELLOW so we don't wake people up for a 02:00 run that hasn't fired yet.
     on = results.get("overnight") or {}
     if isinstance(on, dict):
         if on.get("missed_window"):
-            recs.append(_rec("RED", "No overnight run in 26+ hours — check task states and overnight_log.txt", "overnight"))
+            both_ready = (
+                isinstance(tasks, dict)
+                and "error" not in tasks
+                and all(tasks.get(t) == "Ready" for t in TASK_NAMES)
+            )
+            if both_ready:
+                recs.append(_rec("YELLOW",
+                    "No overnight run in 26+ hours -- tasks are Ready, next fire at 02:00",
+                    "overnight"))
+            else:
+                recs.append(_rec("RED",
+                    "No overnight run in 26+ hours -- check task states and overnight_log.txt",
+                    "overnight"))
         for run in on.get("runs_48h", []) or []:
             fails = [p for p in ("coding", "general", "research")
                      if isinstance(run.get(p), dict) and run[p].get("status") not in (None, "OK")]
@@ -522,9 +555,17 @@ def generate_recommendations(results: dict) -> list[dict]:
     # Service health
     health = results.get("health") or {}
     for svc, info in health.items():
-        if isinstance(info, dict) and info.get("status") == "red":
+        if not (isinstance(info, dict) and info.get("status") == "red"):
+            continue
+        if svc == "bifrost_kb":
             recs.append(_rec("RED",
-                f"Service '{svc}' unreachable: {str(info.get('detail', ''))[:100]}",
+                "bifrost-kb container is down -- RAG enrichment unavailable. "
+                "Check: ssh jhpri@192.168.2.4 'docker ps | grep bifrost-kb'",
+                "health"))
+        else:
+            detail = str(info.get("detail", info.get("note", "")))[:100]
+            recs.append(_rec("RED",
+                f"Service '{svc}' unreachable: {detail}",
                 "health"))
     # Forge systemd
     fsvc = health.get("forge_services") or {}
@@ -612,6 +653,7 @@ def _render_health_table(health: dict) -> str:
     lines = ["| Component | Status | Notes |", "|---|---|---|"]
     order = [
         ("router", "Router /health"),
+        ("bifrost_kb", "bifrost-kb :8091"),
         ("ollama_bifrost", "Ollama Bifrost"),
         ("ollama_hearth", "Ollama Hearth"),
         ("ollama_forge", "Ollama Forge"),
@@ -622,6 +664,8 @@ def _render_health_table(health: dict) -> str:
         note = ""
         if "model_count" in info:
             note = f"{info['model_count']} models"
+        elif "note" in info:
+            note = str(info["note"])[:120]
         elif info.get("detail"):
             note = str(info["detail"])[:80]
         lines.append(f"| {label} | {_status_emoji(status)} {status} | {note} |")

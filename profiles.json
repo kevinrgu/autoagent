@@ -28,7 +28,42 @@
         "escalation_url": null,
         "max_per_run": 2,
         "_note": "manual: ESCALATE verdicts written to DECISIONS_NEEDED.md + revision notes. Human brings to T3 Code session. auto: routes directly to escalation_model for Pass 2 (future, gated on bifrost_cycle.py Portal Command session)."
-      }
+      },
+      "executor_fleet": [
+        {
+          "label": "exec-bifrost",
+          "model": "mistral:7b-instruct-v0.3",
+          "url": "http://192.168.2.33:11434/v1/chat/completions",
+          "node": "bifrost",
+          "trust": "primary"
+        },
+        {
+          "label": "exec-hearth",
+          "model": "mistral:latest",
+          "url": "http://192.168.2.4:11434/v1/chat/completions",
+          "node": "hearth",
+          "trust": "primary"
+        },
+        {
+          "label": "exec-forge-t1",
+          "model": "gemma4:e4b",
+          "url": "http://192.168.2.50:11434/v1/chat/completions",
+          "node": "forge-t1",
+          "trust": "primary"
+        },
+        {
+          "label": "exec-forge-npu",
+          "model": "qwen3:1.7b",
+          "url": "http://192.168.2.50:8003/v1/chat/completions",
+          "node": "forge-npu",
+          "trust": "two_pass",
+          "two_pass": {
+            "refiner_model": "mistral:7b-instruct-v0.3",
+            "refiner_url": "http://192.168.2.33:11434/v1/chat/completions",
+            "refiner_note": "Fix function name, syntax errors. Preserve logic. Output corrected function only."
+          }
+        }
+      ]
     },
     "general": {
       "description": "RFP and prose output quality improvements",
@@ -61,7 +96,42 @@
         "escalation_url": null,
         "max_per_run": 2,
         "_note": "manual: ESCALATE verdicts written to DECISIONS_NEEDED.md + revision notes. Human brings to T3 Code session. auto: routes directly to escalation_model for Pass 2 (future, gated on bifrost_cycle.py Portal Command session)."
-      }
+      },
+      "executor_fleet": [
+        {
+          "label": "exec-bifrost",
+          "model": "mistral:7b-instruct-v0.3",
+          "url": "http://192.168.2.33:11434/v1/chat/completions",
+          "node": "bifrost",
+          "trust": "primary"
+        },
+        {
+          "label": "exec-hearth",
+          "model": "mistral:latest",
+          "url": "http://192.168.2.4:11434/v1/chat/completions",
+          "node": "hearth",
+          "trust": "primary"
+        },
+        {
+          "label": "exec-forge-t1",
+          "model": "gemma4:e4b",
+          "url": "http://192.168.2.50:11434/v1/chat/completions",
+          "node": "forge-t1",
+          "trust": "primary"
+        },
+        {
+          "label": "exec-forge-npu",
+          "model": "qwen3:1.7b",
+          "url": "http://192.168.2.50:8003/v1/chat/completions",
+          "node": "forge-npu",
+          "trust": "two_pass",
+          "two_pass": {
+            "refiner_model": "mistral:7b-instruct-v0.3",
+            "refiner_url": "http://192.168.2.33:11434/v1/chat/completions",
+            "refiner_note": "Fix function name, syntax errors. Preserve logic. Output corrected function only."
+          }
+        }
+      ]
     },
     "research": {
       "description": "Long-context synthesis, research pipeline improvements",
@@ -97,11 +167,50 @@
         "_verify_level5",
         "get_cascade",
         "_aio_sandbox_l6"
+      ],
+      "executor_fleet": [
+        {
+          "label": "exec-bifrost",
+          "model": "mistral:7b-instruct-v0.3",
+          "url": "http://192.168.2.33:11434/v1/chat/completions",
+          "node": "bifrost",
+          "trust": "primary"
+        },
+        {
+          "label": "exec-hearth",
+          "model": "mistral:latest",
+          "url": "http://192.168.2.4:11434/v1/chat/completions",
+          "node": "hearth",
+          "trust": "primary"
+        },
+        {
+          "label": "exec-forge-t1",
+          "model": "gemma4:e4b",
+          "url": "http://192.168.2.50:11434/v1/chat/completions",
+          "node": "forge-t1",
+          "trust": "primary"
+        },
+        {
+          "label": "exec-forge-npu",
+          "model": "qwen3:1.7b",
+          "url": "http://192.168.2.50:8003/v1/chat/completions",
+          "node": "forge-npu",
+          "trust": "two_pass",
+          "two_pass": {
+            "refiner_model": "mistral:7b-instruct-v0.3",
+            "refiner_url": "http://192.168.2.33:11434/v1/chat/completions",
+            "refiner_note": "Fix function name, syntax errors. Preserve logic. Output corrected function only."
+          }
+        }
       ]
     }
   },
   "active": "coding",
   "_changelog": [
+    {
+      "date": "2026-04-21T23:26:23Z",
+      "change": "executor_fleet: 3 primary (Bifrost/Hearth/ForgeT1) + 1 two-pass NPU (qwen3:1.7b). NPU output refined by mistral:7b-instruct-v0.3 before evaluator. Single executor field retained for backward compat until bifrost_cycle.py patched and gated-approved."
+    },
     {
       "date": "2026-04-21T20:40:07Z",
       "change": "executor: all profiles -> mistral:7b-instruct-v0.3-q4_0 @ Bifrost. gemma4:e4b removed (ignores rename rule -- model capability gap confirmed in 2026-04-21 5/5/5 bank)."

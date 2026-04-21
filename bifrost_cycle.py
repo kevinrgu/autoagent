@@ -47,6 +47,7 @@ ACTIVE_NUM_CTX = 8192
 ACTIVE_SYSTEM_RULES = ""
 ACTIVE_EVALUATOR_PROMPT_EXTRA = ""
 ACTIVE_TEMPERATURE = 0.7
+ACTIVE_EXECUTOR_FLEET: list[dict] = []  # populated by load_profile when profile.executor_fleet present
 
 
 # ============================================================================
@@ -540,6 +541,134 @@ def propose(objective: str, target_path: str, target_code: str,
         return proposal
     print("  [Proposer] No usable proposal after retry")
     return None
+def execute_parallel(
+    proposal: str,
+    target_fn: dict | None,
+    executor_fleet: list[dict],
+    num_ctx: int,
+) -> list[tuple[str, str, float, str]]:
+    """Fan out proposal to all configured executors concurrently.
+
+    Returns list of (label, new_code, elapsed_s, trust_level) in completion
+    order (fastest first). Empty results are filtered. Two-pass executors run
+    Pass 1 (generator) then Pass 2 (refiner) sequentially on their own thread;
+    primary executors run directly. All threads run in parallel.
+    """
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    def _build_exec_messages(ep: dict) -> tuple[str, str]:
+        if target_fn:
+            sys_msg = (
+                "You are a Python implementer. You will be shown ONE function. "
+                "Output the COMPLETE modified function. Do NOT output code "
+                "outside this function. Start with def or async def. No "
+                "markdown fences, no explanations, no imports, no surrounding "
+                "code."
+            )
+            usr_msg = (
+                f"Proposed change:\n{proposal[:1500]}\n\n"
+                f"Current function (modify ONLY this):\n"
+                f"```python\n{target_fn['source']}\n```\n\n"
+                f"Output the COMPLETE modified function with name "
+                f"`{target_fn['name']}` preserved exactly:"
+            )
+        else:
+            sys_msg = (
+                "You are a Python implementer. Output ONLY the modified "
+                "function. Start with def or async def. No markdown fences, "
+                "no explanations."
+            )
+            usr_msg = f"Implement this change:\n{proposal[:2000]}"
+        return sys_msg, usr_msg
+
+    def _run_primary(ep: dict) -> tuple[str, str, float, str]:
+        t0 = time.time()
+        label = ep["label"]
+        sys_msg, usr_msg = _build_exec_messages(ep)
+        try:
+            result = call_llm(
+                ep["url"], ep["model"], sys_msg, usr_msg,
+                num_ctx=num_ctx, max_tokens=1500,
+            )
+            elapsed = time.time() - t0
+            code = strip_fences(result).strip() if result else ""
+            print(f"  [Executor/{label}] {len(code)} chars in {elapsed:.1f}s")
+            return (label, code, elapsed, "primary")
+        except Exception as e:
+            elapsed = time.time() - t0
+            print(f"  [Executor/{label}] FAIL {elapsed:.1f}s: {e}")
+            return (label, "", elapsed, "primary")
+
+    def _run_two_pass(ep: dict) -> tuple[str, str, float, str]:
+        t0 = time.time()
+        label = ep["label"]
+        cfg = ep.get("two_pass", {}) or {}
+        refiner_url = cfg.get("refiner_url", "")
+        refiner_model = cfg.get("refiner_model", "")
+
+        sys_msg, usr_msg = _build_exec_messages(ep)
+        try:
+            raw = call_llm(
+                ep["url"], ep["model"], sys_msg, usr_msg,
+                num_ctx=min(num_ctx, 4096), max_tokens=800,
+            )
+            raw = strip_fences(raw).strip() if raw else ""
+            print(f"  [Executor/{label}/P1] {len(raw)} chars in {time.time()-t0:.1f}s")
+        except Exception as e:
+            print(f"  [Executor/{label}/P1] FAIL: {e}")
+            return (label, "", time.time() - t0, "two_pass")
+
+        if len(raw) < 30:
+            print(f"  [Executor/{label}/P1] too short, skipping P2")
+            return (label, "", time.time() - t0, "two_pass")
+
+        if not refiner_url or not refiner_model:
+            return (label, raw, time.time() - t0, "two_pass")
+
+        fn_name = target_fn["name"] if target_fn else "the function"
+        refine_sys = (
+            "You are a Python code reviewer. Fix issues in the provided "
+            "function implementation."
+        )
+        refine_usr = (
+            f"Fix this Python function implementation. Requirements:\n"
+            f"1. The function name MUST be exactly `{fn_name}` - rename if different\n"
+            f"2. Fix any syntax errors\n"
+            f"3. Preserve the core logic\n"
+            f"4. Output ONLY the corrected function, no explanations\n\n"
+            f"```python\n{raw}\n```"
+        )
+        try:
+            refined = call_llm(
+                refiner_url, refiner_model, refine_sys, refine_usr,
+                num_ctx=num_ctx, max_tokens=1500,
+            )
+            elapsed = time.time() - t0
+            code = strip_fences(refined).strip() if refined else raw
+            print(f"  [Executor/{label}/P2] {len(code)} chars total in {elapsed:.1f}s")
+            return (label, code, elapsed, "two_pass")
+        except Exception as e:
+            elapsed = time.time() - t0
+            print(f"  [Executor/{label}/P2] refiner FAIL, using P1: {e}")
+            return (label, raw, elapsed, "two_pass")
+
+    results: list[tuple[str, str, float, str]] = []
+    if not executor_fleet:
+        return results
+
+    print(f"  [Executor] parallel fan-out across {len(executor_fleet)} nodes")
+    with ThreadPoolExecutor(max_workers=len(executor_fleet)) as pool:
+        futures = {}
+        for ep in executor_fleet:
+            fn = _run_two_pass if ep.get("trust") == "two_pass" else _run_primary
+            futures[pool.submit(fn, ep)] = ep["label"]
+        for future in as_completed(futures):
+            label, code, elapsed, trust = future.result()
+            if code:
+                results.append((label, code, elapsed, trust))
+    return results
+
+
 def run_cycle(cycle_num: int, objective: str, target_path: str,
               decisions_path: str) -> bool:
     target_code = read_file(target_path)
@@ -566,6 +695,226 @@ def run_cycle(cycle_num: int, objective: str, target_path: str,
         log_decision(decisions_path, cycle_num, proposal[:800], "DUPLICATE: same proposal seen earlier in run", False)
         return False
     _seen_proposal_hashes.add(proposal_hash)
+
+    # ========================================================
+    # Parallel fan-out path - used when executor_fleet is
+    # configured in the profile. Falls through to legacy single-
+    # executor loop below when ACTIVE_EXECUTOR_FLEET is empty.
+    # ========================================================
+    if ACTIVE_EXECUTOR_FLEET:
+        candidates = execute_parallel(
+            proposal, target_fn, ACTIVE_EXECUTOR_FLEET, ACTIVE_NUM_CTX,
+        )
+        if not candidates:
+            print("  [Executor] all nodes returned empty output")
+            log_decision(
+                decisions_path, cycle_num, proposal[:800],
+                "EXECUTOR_FAIL (all nodes empty)", False,
+            )
+            return False
+
+        rejection_reasons: list[str] = []
+        for label, new_code, elapsed, trust in candidates:
+            if target_fn:
+                if not re.match(r"^(async\s+)?def\s+", new_code):
+                    rejection_reasons.append(f"{label}:no-def")
+                    continue
+                fn_match = re.search(r"(async\s+)?def\s+(\w+)", new_code)
+                if fn_match and fn_match.group(2) != target_fn["name"]:
+                    rejection_reasons.append(
+                        f"{label}:renamed({fn_match.group(2)})"
+                    )
+                    continue
+                code_to_check = splice_function_back(
+                    target_code, new_code,
+                    target_fn["start"], target_fn["end"],
+                )
+                is_isolation_mode = True
+                is_diff_mode = False
+                diff_result = None
+            else:
+                diff_result = apply_diff(target_code, new_code)
+                is_diff_mode = diff_result is not None
+                is_isolation_mode = False
+                code_to_check = diff_result if is_diff_mode else new_code
+
+            syn_ok, syn_err = syntax_check(code_to_check)
+            if not syn_ok:
+                rejection_reasons.append(f"{label}:syntax")
+                print(f"  [Executor/{label}] Syntax FAIL: {syn_err[:80]}")
+                continue
+
+            try:
+                before_tree = ast.parse(target_code)
+                after_tree = ast.parse(code_to_check)
+                before_syms = [
+                    n.name for n in ast.walk(before_tree)
+                    if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
+                ]
+                after_syms = [
+                    n.name for n in ast.walk(after_tree)
+                    if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
+                ]
+                from collections import Counter as _PCounter
+                after_counts = _PCounter(after_syms)
+                missing = set(before_syms) - set(after_syms)
+                dupes = {n: c for n, c in after_counts.items() if c > 1}
+                if missing:
+                    rejection_reasons.append(f"{label}:missing({sorted(missing)[:3]})")
+                    continue
+                if dupes:
+                    rejection_reasons.append(f"{label}:dupes({list(dupes)[:3]})")
+                    continue
+            except SyntaxError:
+                rejection_reasons.append(f"{label}:ast-parse")
+                continue
+
+            eval_system = (
+                "You are a code quality evaluator. Reply PASS or FAIL on the "
+                "FIRST LINE followed by reasoning. PASS only if the change is "
+                "correct and improves the code. FAIL if it introduces "
+                "breaking changes, wrong imports, or missing call-site updates."
+            )
+            if ACTIVE_EVALUATOR_PROMPT_EXTRA:
+                eval_system += "\n\n" + ACTIVE_EVALUATOR_PROMPT_EXTRA
+            if target_fn:
+                eval_user = (
+                    f"Objective: {objective}\n\n"
+                    f"Context: only the function `{target_fn['name']}` is "
+                    f"being modified. The rest of the file is unchanged.\n\n"
+                    f"Original function:\n```python\n{target_fn['source']}\n```\n\n"
+                    f"Proposed change description:\n{proposal[:1000]}\n\n"
+                    f"New function:\n```python\n{new_code[:4000]}\n```\n\n"
+                    f"PASS or FAIL? Evaluate the function change in isolation - "
+                    f"assume all other symbols exist in the full file."
+                )
+            else:
+                eval_user = (
+                    f"Objective: {objective}\n\n"
+                    f"Original:\n```python\n{target_code[:12000]}\n```\n\n"
+                    f"Proposed:\n{proposal[:1000]}\n\n"
+                    f"New code:\n```python\n{new_code[:4000]}\n```\n\n"
+                    f"PASS or FAIL?"
+                )
+            t_eval = time.time()
+            try:
+                evaluation = call_llm(
+                    EVALUATOR_URL, EVALUATOR_MODEL,
+                    eval_system, eval_user,
+                    num_ctx=ACTIVE_NUM_CTX, max_tokens=1500,
+                )
+            except Exception as e:
+                rejection_reasons.append(f"{label}:eval-err")
+                print(f"  [Evaluator/{label}] FAIL: {e}")
+                continue
+            if not evaluation or len(evaluation.strip()) == 0:
+                rejection_reasons.append(f"{label}:eval-empty")
+                continue
+            first_line = evaluation.strip().split("\n")[0].strip().upper()
+            accepted = first_line.startswith("PASS")
+            print(
+                f"  [Evaluator/{label}] {len(evaluation)} chars "
+                f"({time.time()-t_eval:.1f}s) -> "
+                f"{'ACCEPT' if accepted else 'REJECT'}"
+            )
+            log_decision(
+                decisions_path, cycle_num, proposal[:800],
+                f"[{label}/{trust}] {evaluation[:700]}",
+                accepted, len(new_code),
+            )
+            if not accepted:
+                eval_lines = evaluation.strip().split("\n")
+                reason = " ".join(line.strip() for line in eval_lines[:3])[:200]
+                _recent_rejections.append(f"{label}: {reason}")
+                if len(_recent_rejections) > MAX_REJECTION_HISTORY:
+                    _recent_rejections.pop(0)
+                rejection_reasons.append(f"{label}:reject")
+                continue
+
+            try:
+                if is_isolation_mode:
+                    with open(target_path, "w", encoding="utf-8") as f:
+                        f.write(code_to_check)
+                    apply_result = (
+                        f"Spliced isolated function {target_fn['name']} "
+                        f"into {Path(target_path).name}"
+                    )
+                elif is_diff_mode:
+                    with open(target_path, "w", encoding="utf-8") as f:
+                        f.write(diff_result)
+                    apply_result = "Applied via SEARCH/REPLACE diff"
+                else:
+                    apply_result = smart_apply(target_path, target_code, new_code)
+                print(f"  [Apply/{label}] {apply_result}")
+
+                written_code = read_file(target_path)
+                post_ok, post_err = syntax_check(written_code)
+                if post_ok:
+                    try:
+                        pre_tree = ast.parse(target_code)
+                        post_tree = ast.parse(written_code)
+                        pre_names = [
+                            n.name for n in ast.walk(pre_tree)
+                            if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
+                        ]
+                        post_names = [
+                            n.name for n in ast.walk(post_tree)
+                            if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
+                        ]
+                        from collections import Counter as _PC
+                        post_counts = _PC(post_names)
+                        missing2 = set(pre_names) - set(post_names)
+                        dupes2 = {k: v for k, v in post_counts.items() if v > 1}
+                        if missing2:
+                            post_ok = False
+                            post_err = f"missing symbols after write: {sorted(missing2)}"
+                        elif dupes2:
+                            post_ok = False
+                            post_err = f"duplicate symbols after write: {dupes2}"
+                    except SyntaxError as e:
+                        post_ok = False
+                        post_err = f"post-write AST parse failed: {e}"
+                if not post_ok:
+                    bak_path = Path(target_path).with_suffix(".py.bak")
+                    if bak_path.exists():
+                        bak_path.replace(target_path)
+                    else:
+                        with open(target_path, "w", encoding="utf-8") as f:
+                            f.write(target_code)
+                    print(f"  [ROLLBACK/{label}] {post_err[:200]}")
+                    rejection_reasons.append(f"{label}:rollback")
+                    continue
+
+                gates_ok, gate_results = run_all_gates(Path(target_path))
+                if not gates_ok:
+                    bak_path = Path(target_path).with_suffix(".py.bak")
+                    if bak_path.exists():
+                        bak_path.replace(target_path)
+                    else:
+                        with open(target_path, "w", encoding="utf-8") as f:
+                            f.write(target_code)
+                    gate_summary = "; ".join(
+                        f"{n}:{d}" for n, ok, d in gate_results if not ok
+                    )
+                    print(f"  [GATES/{label}] FAIL - restored {Path(target_path).name}")
+                    rejection_reasons.append(f"{label}:gates({gate_summary[:60]})")
+                    continue
+                print(f"  [Cycle {cycle_num}] ACCEPTED via {label} "
+                      f"({trust}, {elapsed:.1f}s)")
+                return True
+            except Exception as e:
+                print(f"  [Apply/{label}] FAIL: {e}")
+                rejection_reasons.append(f"{label}:apply-err")
+                continue
+
+        reason_str = ", ".join(rejection_reasons) or "all-rejected"
+        print(f"  [Cycle {cycle_num}] all {len(candidates)} candidates rejected")
+        log_decision(
+            decisions_path, cycle_num, proposal[:800],
+            f"All parallel candidates rejected: {reason_str[:600]}",
+            False,
+        )
+        return False
 
     MAX_RETRIES = 3
     retries = 0
@@ -921,7 +1270,7 @@ def load_profile(profile_name: str) -> dict | None:
     """Load a named profile from profiles.json and override global config."""
     global PROPOSER_URL, PROPOSER_MODEL, EXECUTOR_URL, EXECUTOR_MODEL
     global EVALUATOR_URL, EVALUATOR_MODEL, ACTIVE_NUM_CTX, ACTIVE_SYSTEM_RULES
-    global ACTIVE_EVALUATOR_PROMPT_EXTRA, ACTIVE_TEMPERATURE
+    global ACTIVE_EVALUATOR_PROMPT_EXTRA, ACTIVE_TEMPERATURE, ACTIVE_EXECUTOR_FLEET
 
     profiles_path = Path(__file__).parent / "profiles.json"
     if not profiles_path.exists():
@@ -949,6 +1298,7 @@ def load_profile(profile_name: str) -> dict | None:
     ACTIVE_SYSTEM_RULES = profile.get("system_rules", "")
     ACTIVE_EVALUATOR_PROMPT_EXTRA = profile.get("evaluator_prompt_extra", "")
     ACTIVE_TEMPERATURE = profile.get("temperature", 0.7)
+    ACTIVE_EXECUTOR_FLEET = profile.get("executor_fleet", [])
 
     return profile
 

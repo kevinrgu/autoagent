@@ -39,6 +39,8 @@ ROUTER_HEALTH  = "http://192.168.2.4:8089/health"
 FORGE_OLLAMA   = "http://192.168.2.50:11434"
 BIFROST_OLLAMA = "http://192.168.2.33:11434"
 HEARTH_OLLAMA  = "http://192.168.2.4:11434"
+FORGE_FLM      = "http://192.168.2.50:8003"      # FastFlowLM on XDNA2 NPU (elevated 2026-04-21)
+FORGE_LLAMA    = "http://192.168.2.50:11438"     # llama-server T2.5 GGUF bypass
 KB_HEALTH_URL  = "http://192.168.2.4:8091/health"
 KB_STATS_URL   = "http://192.168.2.4:8091/stats?project=default"
 
@@ -284,6 +286,25 @@ def collect_service_health() -> dict:
             health[label] = {"status": "green", "model_count": n}
         else:
             health[label] = {"status": "red", "detail": str(data)[:120]}
+
+    # FastFlowLM NPU (XDNA2) — elevated to tier-1 fallback 2026-04-21 (36.1 tok/s)
+    ok, data = _get(f"{FORGE_FLM}/v1/models")
+    if ok and isinstance(data, dict):
+        n = len(data.get("data", [])) or len(data.get("models", []))
+        health["flm_forge"] = {"status": "green", "model_count": n,
+                                 "note": "NPU elevated 2026-04-21"}
+    else:
+        health["flm_forge"] = {"status": "red", "detail": str(data)[:120]}
+
+    # llama-server T2.5 (GGUF bypass, 70B via mmap)
+    ok, data = _get(f"{FORGE_LLAMA}/health")
+    if ok:
+        health["llama_server_forge"] = {"status": "green",
+                                        "note": "T2.5 llama3.3:70b"}
+    else:
+        # /health may not exist; try a probe chat call instead
+        health["llama_server_forge"] = {"status": "yellow",
+                                        "detail": "no /health route; inference-only endpoint"}
 
     # Forge systemd — pipe-to-cat prevents pagers and the non-zero "inactive"
     # exit code from killing the whole line.
@@ -657,6 +678,8 @@ def _render_health_table(health: dict) -> str:
         ("ollama_bifrost", "Ollama Bifrost"),
         ("ollama_hearth", "Ollama Hearth"),
         ("ollama_forge", "Ollama Forge"),
+        ("flm_forge", "FLM NPU :8003 (T1 fallback)"),
+        ("llama_server_forge", "llama-server T2.5 :11438"),
     ]
     for key, label in order:
         info = health.get(key) or {}

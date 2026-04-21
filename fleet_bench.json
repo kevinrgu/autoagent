@@ -1,0 +1,73 @@
+{
+  "started": "2026-04-21T16:48:07",
+  "finished": "2026-04-21T16:49:27",
+  "prompt": "Write a Python function that reads a JSON file, validates that it contains a name and value field, and returns a dict. Include type hints and docstring. Return only the code.",
+  "max_tokens": 300,
+  "results": [
+    {
+      "slot": "T1-Bifrost",
+      "host": "192.168.2.33",
+      "model": "gemma4:e4b",
+      "backend": "ollama",
+      "wall_s": 10.92,
+      "tokens": 300,
+      "tok_s": 27.48,
+      "preview": ".\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n"
+    },
+    {
+      "slot": "T1-Hearth",
+      "host": "192.168.2.4",
+      "model": "gemma4:e4b",
+      "backend": "ollama",
+      "error": "HTTPStatusError: Client error '404 Not Found' for url 'http://192.168.2.4:11434/v1/chat/completions'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404",
+      "wall_s": 0.39
+    },
+    {
+      "slot": "T1-Forge",
+      "host": "192.168.2.50",
+      "model": "gemma4:e4b",
+      "backend": "ollama",
+      "wall_s": 6.08,
+      "tokens": 300,
+      "tok_s": 49.36,
+      "preview": "```python\nimport json\nimport os\nfrom typing import Dict, Any, Union\n\ndef read_and_validate_json(file_path: str) -> Dict[str, Any]:\n    \"\"\"\n "
+    },
+    {
+      "slot": "T2-Forge",
+      "host": "192.168.2.50",
+      "model": "bifrost-t2-gemma4",
+      "backend": "ollama",
+      "wall_s": 6.99,
+      "tokens": 300,
+      "tok_s": 42.9,
+      "preview": ""
+    },
+    {
+      "slot": "T2.5-Forge",
+      "host": "192.168.2.50",
+      "model": "llama3.3:70b",
+      "backend": "llama-server",
+      "wall_s": 46.92,
+      "tokens": 233,
+      "tok_s": 4.97,
+      "preview": "```python\nimport json\nfrom typing import Dict\n\ndef read_json_file(file_path: str) -> Dict:\n    \"\"\"\n    Reads a JSON file, validates that it "
+    },
+    {
+      "slot": "NPU-Forge",
+      "host": "192.168.2.50",
+      "model": "qwen3:1.7b",
+      "backend": "flm",
+      "wall_s": 8.47,
+      "tokens": 300,
+      "tok_s": 35.4,
+      "preview": "\nOkay, I need to write a Python function that reads a JSON file, validates it has a name and value field, and returns a dict. Let me think a"
+    },
+    {
+      "slot": "3-Fast",
+      "host": "api.anthropic.com",
+      "model": "claude-haiku-4-5-20251001",
+      "skipped": true,
+      "reason": "no ANTHROPIC_API_KEY"
+    }
+  ]
+}

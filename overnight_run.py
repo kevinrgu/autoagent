@@ -19,6 +19,7 @@ from pathlib import Path
 
 import httpx
 import pk_sync
+import telegram_notify
 
 PROFILES = ["coding", "general", "research"]
 CYCLES_PER_PROFILE = 5
@@ -329,6 +330,13 @@ def main():
         status = "TIMEOUT" if r["timed_out"] else ("OK" if r["returncode"] == 0 else "FAIL")
         print(f"    {r['profile']:10s} {status:7s} {r['elapsed_s']:8.1f}s")
     print(f"{'='*60}")
+
+    # Telegram notification (no-op if TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID not set)
+    try:
+        msg = telegram_notify.format_overnight_summary(run_stamp, results, log_lines)
+        telegram_notify.send_message(msg)
+    except Exception as e:
+        print(f"  telegram_notify failed: {e}")
 
 
 if __name__ == "__main__":

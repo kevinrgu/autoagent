@@ -20,8 +20,15 @@
         "D:\\Projects\\bifrost-router\\subtask_graph.py"
       ],
       "system_rules": "CRITICAL CODE RULES:\n- All LangGraph node functions are SYNC (def, not async def)\n- To call async functions from sync context, use: _run_async(async_coroutine)\n- NEVER use raw 'await' in a sync def -- always wrap with _run_async()\n- The _run_async() helper already exists in the file\n- Check the function signatures below to know which functions are async vs sync\n- Do NOT propose changes that only restructure async/await patterns\n- Do NOT add new imports or dependencies\n- Keep changes minimal — one function, one improvement\n- Use `log` for all logging calls — the module-level logger already defined in the file. Do NOT use `logger`, `logging.debug()`, or bare `import logging`.\n- Do NOT propose wrapping an existing synchronous call in `_run_async()` unless you can see that the called function is defined as `async def`. If `run_subtask`, `_decompose_async`, or similar is already called correctly, do not change the call pattern.\n- Do NOT propose changing a function signature from `def` to `async def`.\n- Do NOT propose the same improvement to the same function twice. If a function has already been the target of a proposal in this session, choose a different function.",
-      "evaluator_prompt_extra": "Focus on correctness, not style. PASS if the change is functionally correct, passes syntax check, and does not break existing behavior. Reject for actual bugs, missing imports, type errors, or logic regressions.\n\nALSO REJECT if the change adds provably-unreachable code, redundant conditional branches, or duplicate guard clauses for conditions already handled earlier in the same function. Dead code is a quality regression even when harmless -- if you find yourself noting that a block is unreachable, that is a REJECT signal, not a PASS-with-caveat.\n\nALSO REJECT if the change introduces a compound conditional where one branch strictly subsumes the other. Examples that must be REJECTED:\n  - `X is None or not X`  (not X already covers the None case)\n  - `not X or X is None`  (same, reversed)\n  - `X == None or len(X) == 0`  (not X covers both)\nIf you observe that one condition makes the other unreachable, that is a REJECT -- do not PASS-with-caveat.",
-      "num_ctx": 32768
+      "evaluator_prompt_extra": "Focus on correctness, not style. PASS if the change is functionally correct, passes syntax check, and does not break existing behavior. Reject for actual bugs, missing imports, type errors, or logic regressions.\n\nALSO REJECT if the change adds provably-unreachable code, redundant conditional branches, or duplicate guard clauses for conditions already handled earlier in the same function. Dead code is a quality regression even when harmless -- if you find yourself noting that a block is unreachable, that is a REJECT signal, not a PASS-with-caveat.\n\nALSO REJECT if the change introduces a compound conditional where one branch strictly subsumes the other. Examples that must be REJECTED:\n  - `X is None or not X`  (not X already covers the None case)\n  - `not X or X is None`  (same, reversed)\n  - `X == None or len(X) == 0`  (not X covers both)\nIf you observe that one condition makes the other unreachable, that is a REJECT -- do not PASS-with-caveat.\n\nRESPONSE FORMAT -- always end your evaluation with one of these verdict blocks:\n\nIf the change is correct and safe:\nVERDICT: ACCEPT\n\nIf the change has hard failures (syntax error, NameError, broken call signature,\nlogic inversion, removes required code, introduces infinite loop or deadlock):\nVERDICT: REJECT\nREASON: <one line describing the specific failure>\n\nIf the change is directionally correct but has specific fixable issues\n(wrong variable name, incomplete guard, missing import, off-by-one,\nstyle that conflicts with codebase conventions):\nVERDICT: ESCALATE\nREASON: <one line summary>\nREVISION_NOTES:\n- <specific fix 1>\n- <specific fix 2>\n\nESCALATE is for salvageable proposals only. If the core logic is wrong, use REJECT.\nIf you are noting an issue but accepting anyway, use ESCALATE instead -- do not\nPASS-with-caveat.",
+      "num_ctx": 32768,
+      "escalation": {
+        "mode": "manual",
+        "escalation_model": "claude-sonnet-4-6",
+        "escalation_url": null,
+        "max_per_run": 2,
+        "_note": "manual: ESCALATE verdicts written to DECISIONS_NEEDED.md + revision notes. Human brings to T3 Code session. auto: routes directly to escalation_model for Pass 2 (future, gated on bifrost_cycle.py Portal Command session)."
+      }
     },
     "general": {
       "description": "RFP and prose output quality improvements",
@@ -46,7 +53,15 @@
         "_build_rfp_dag"
       ],
       "system_rules": "Focus on RFP output quality: section completeness, prose clarity, requirement coverage. Evaluate whether changes improve the quality of generated RFP responses.\n- Use `log` for all logging calls — the module-level logger already defined in the file. Do NOT use `logger`, `logging.debug()`, or bare `import logging`.\n- Do NOT propose wrapping an existing synchronous call in `_run_async()` unless you can see that the called function is defined as `async def`. If `run_subtask`, `_decompose_async`, or similar is already called correctly, do not change the call pattern.\n- Do NOT propose changing a function signature from `def` to `async def`.\n- Do NOT propose the same improvement to the same function twice. If a function has already been the target of a proposal in this session, choose a different function.",
-      "num_ctx": 32768
+      "num_ctx": 32768,
+      "evaluator_prompt_extra": "\n\nRESPONSE FORMAT -- always end your evaluation with one of these verdict blocks:\n\nIf the change is correct and safe:\nVERDICT: ACCEPT\n\nIf the change has hard failures (syntax error, NameError, broken call signature,\nlogic inversion, removes required code, introduces infinite loop or deadlock):\nVERDICT: REJECT\nREASON: <one line describing the specific failure>\n\nIf the change is directionally correct but has specific fixable issues\n(wrong variable name, incomplete guard, missing import, off-by-one,\nstyle that conflicts with codebase conventions):\nVERDICT: ESCALATE\nREASON: <one line summary>\nREVISION_NOTES:\n- <specific fix 1>\n- <specific fix 2>\n\nESCALATE is for salvageable proposals only. If the core logic is wrong, use REJECT.\nIf you are noting an issue but accepting anyway, use ESCALATE instead -- do not\nPASS-with-caveat.",
+      "escalation": {
+        "mode": "manual",
+        "escalation_model": "claude-sonnet-4-6",
+        "escalation_url": null,
+        "max_per_run": 2,
+        "_note": "manual: ESCALATE verdicts written to DECISIONS_NEEDED.md + revision notes. Human brings to T3 Code session. auto: routes directly to escalation_model for Pass 2 (future, gated on bifrost_cycle.py Portal Command session)."
+      }
     },
     "research": {
       "description": "Long-context synthesis, research pipeline improvements",
@@ -68,11 +83,23 @@
       ],
       "system_rules": "Focus on research pipeline quality: long-context handling, source synthesis, citation accuracy. Evaluate whether changes improve research output depth and correctness.\n- Do NOT add new imports or dependencies\n- Keep changes minimal — one function, one improvement\n- Use `log` for all logging calls — the module-level logger already defined in the file. Do NOT use `logger`, `logging.debug()`, or bare `import logging`.\n- Do NOT propose wrapping an existing synchronous call in `_run_async()` unless you can see that the called function is defined as `async def`. If `run_subtask`, `_decompose_async`, or similar is already called correctly, do not change the call pattern.\n- Do NOT propose changing a function signature from `def` to `async def`.\n- Do NOT propose the same improvement to the same function twice. If a function has already been the target of a proposal in this session, choose a different function.",
       "temperature": 0.9,
-      "num_ctx": 32768
+      "num_ctx": 32768,
+      "evaluator_prompt_extra": "\n\nRESPONSE FORMAT -- always end your evaluation with one of these verdict blocks:\n\nIf the change is correct and safe:\nVERDICT: ACCEPT\n\nIf the change has hard failures (syntax error, NameError, broken call signature,\nlogic inversion, removes required code, introduces infinite loop or deadlock):\nVERDICT: REJECT\nREASON: <one line describing the specific failure>\n\nIf the change is directionally correct but has specific fixable issues\n(wrong variable name, incomplete guard, missing import, off-by-one,\nstyle that conflicts with codebase conventions):\nVERDICT: ESCALATE\nREASON: <one line summary>\nREVISION_NOTES:\n- <specific fix 1>\n- <specific fix 2>\n\nESCALATE is for salvageable proposals only. If the core logic is wrong, use REJECT.\nIf you are noting an issue but accepting anyway, use ESCALATE instead -- do not\nPASS-with-caveat.",
+      "escalation": {
+        "mode": "manual",
+        "escalation_model": "claude-sonnet-4-6",
+        "escalation_url": null,
+        "max_per_run": 2,
+        "_note": "manual: ESCALATE verdicts written to DECISIONS_NEEDED.md + revision notes. Human brings to T3 Code session. auto: routes directly to escalation_model for Pass 2 (future, gated on bifrost_cycle.py Portal Command session)."
+      }
     }
   },
   "active": "coding",
   "_changelog": [
+    {
+      "date": "2026-04-21T00:27:50Z",
+      "change": "evaluator_prompt_extra: structured VERDICT format (ACCEPT/REJECT/ESCALATE). escalation config block added (mode=manual). bifrost_cycle.py graceful degradation: ESCALATE treated as reject until Portal Command session wires the routing."
+    },
     {
       "date": "2026-04-20T21:26:47Z",
       "change": "evaluator_prompt_extra iteration #2: embedded redundancy rejection rules"

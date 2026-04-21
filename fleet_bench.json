@@ -1,6 +1,6 @@
 {
-  "started": "2026-04-21T16:48:07",
-  "finished": "2026-04-21T16:49:27",
+  "started": "2026-04-21T17:07:17",
+  "finished": "2026-04-21T17:09:29",
   "prompt": "Write a Python function that reads a JSON file, validates that it contains a name and value field, and returns a dict. Include type hints and docstring. Return only the code.",
   "max_tokens": 300,
   "results": [
@@ -9,30 +9,29 @@
       "host": "192.168.2.33",
       "model": "gemma4:e4b",
       "backend": "ollama",
-      "wall_s": 10.92,
+      "wall_s": 26.68,
       "tokens": 300,
-      "tok_s": 27.48,
-      "preview": ".\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n.\n"
+      "tok_s": 11.24,
+      "preview": "este un exemplu de cod Python care implementeaz\u0103 o func\u021bionalitate de tip \"dummy\" sau de testare, deoarece nu a\u021bi specificat ce ar trebui s\u0103"
     },
     {
       "slot": "T1-Hearth",
       "host": "192.168.2.4",
       "model": "mistral:latest",
       "backend": "ollama",
-      "wall_s": 37.17,
-      "tokens": 300,
-      "tok_s": 8.07,
-      "preview": " Here's a Python function that reads a JSON file, validates name and value fields, and returns a dictionary. The function includes type hint",
-      "note": "re-run after fixing model from gemma4:e4b (not present on Hearth) to mistral:latest (pinned active_model per fleet_config)"
+      "wall_s": 36.3,
+      "tokens": 283,
+      "tok_s": 7.8,
+      "preview": " Here's a Python function that reads a JSON file, validates if it contains 'name' and 'value' fields, and returns a dictionary. The function"
     },
     {
       "slot": "T1-Forge",
       "host": "192.168.2.50",
       "model": "gemma4:e4b",
       "backend": "ollama",
-      "wall_s": 6.08,
+      "wall_s": 6.05,
       "tokens": 300,
-      "tok_s": 49.36,
+      "tok_s": 49.59,
       "preview": "```python\nimport json\nimport os\nfrom typing import Dict, Any, Union\n\ndef read_and_validate_json(file_path: str) -> Dict[str, Any]:\n    \"\"\"\n "
     },
     {
@@ -40,9 +39,9 @@
       "host": "192.168.2.50",
       "model": "bifrost-t2-gemma4",
       "backend": "ollama",
-      "wall_s": 6.99,
+      "wall_s": 6.86,
       "tokens": 300,
-      "tok_s": 42.9,
+      "tok_s": 43.73,
       "preview": ""
     },
     {
@@ -50,8 +49,8 @@
       "host": "192.168.2.50",
       "model": "llama3.3:70b",
       "backend": "llama-server",
-      "wall_s": 46.92,
-      "tokens": 233,
+      "wall_s": 46.7,
+      "tokens": 232,
       "tok_s": 4.97,
       "preview": "```python\nimport json\nfrom typing import Dict\n\ndef read_json_file(file_path: str) -> Dict:\n    \"\"\"\n    Reads a JSON file, validates that it "
     },
@@ -60,9 +59,9 @@
       "host": "192.168.2.50",
       "model": "qwen3:1.7b",
       "backend": "flm",
-      "wall_s": 8.47,
+      "wall_s": 8.52,
       "tokens": 300,
-      "tok_s": 35.4,
+      "tok_s": 35.23,
       "preview": "\nOkay, I need to write a Python function that reads a JSON file, validates it has a name and value field, and returns a dict. Let me think a"
     },
     {

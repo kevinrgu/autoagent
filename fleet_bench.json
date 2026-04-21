@@ -17,10 +17,13 @@
     {
       "slot": "T1-Hearth",
       "host": "192.168.2.4",
-      "model": "gemma4:e4b",
+      "model": "mistral:latest",
       "backend": "ollama",
-      "error": "HTTPStatusError: Client error '404 Not Found' for url 'http://192.168.2.4:11434/v1/chat/completions'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404",
-      "wall_s": 0.39
+      "wall_s": 37.17,
+      "tokens": 300,
+      "tok_s": 8.07,
+      "preview": " Here's a Python function that reads a JSON file, validates name and value fields, and returns a dictionary. The function includes type hint",
+      "note": "re-run after fixing model from gemma4:e4b (not present on Hearth) to mistral:latest (pinned active_model per fleet_config)"
     },
     {
       "slot": "T1-Forge",

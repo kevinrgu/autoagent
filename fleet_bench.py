@@ -22,7 +22,7 @@ MAX_TOKENS = 300
 # (slot, host, model, endpoint, backend)
 ENDPOINTS = [
     ("T1-Bifrost",  "192.168.2.33", "gemma4:e4b",                "http://192.168.2.33:11434/v1/chat/completions", "ollama"),
-    ("T1-Hearth",   "192.168.2.4",  "gemma4:e4b",                "http://192.168.2.4:11434/v1/chat/completions",  "ollama"),
+    ("T1-Hearth",   "192.168.2.4",  "mistral:latest",            "http://192.168.2.4:11434/v1/chat/completions",  "ollama"),
     ("T1-Forge",    "192.168.2.50", "gemma4:e4b",                "http://192.168.2.50:11434/v1/chat/completions", "ollama"),
     ("T2-Forge",    "192.168.2.50", "bifrost-t2-gemma4",         "http://192.168.2.50:11434/v1/chat/completions", "ollama"),
     ("T2.5-Forge",  "192.168.2.50", "llama3.3:70b",              "http://192.168.2.50:11438/v1/chat/completions", "llama-server"),

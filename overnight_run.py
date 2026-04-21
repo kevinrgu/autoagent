@@ -84,6 +84,34 @@ def check_worktree_divergence() -> str | None:
     return None
 
 
+def _warmup_proposer(profiles_path: str, profile_name: str, timeout: int = 180) -> bool:
+    """Warm up proposer model before cycles. Prevents cold-load PROPOSER_FAIL timeouts."""
+    import requests as _req
+    import time as _time
+    try:
+        profiles = json.loads(Path(profiles_path).read_text(encoding="utf-8"))
+        prof = profiles["profiles"].get(profile_name, {})
+        url   = prof.get("proposer", {}).get("url", "")
+        model = prof.get("proposer", {}).get("model", "")
+        if not url or not model:
+            print(f"  [warmup] no proposer config for {profile_name}, skipping")
+            return False
+        print(f"  [warmup] pinging {model} (timeout={timeout}s)...")
+        t0 = _time.time()
+        r = _req.post(url,
+            json={"model": model,
+                  "messages": [{"role": "user", "content": "Ready?"}],
+                  "stream": False, "max_tokens": 5, "keep_alive": "2h"},
+            timeout=timeout)
+        elapsed = _time.time() - t0
+        ok = r.status_code == 200
+        print(f"  [warmup] {'warm' if ok else 'failed'} in {elapsed:.1f}s (status={r.status_code})")
+        return ok
+    except Exception as e:
+        print(f"  [warmup] error: {e} -- continuing anyway")
+        return False
+
+
 def warmup_endpoints(profile_name: str):
     """Ping proposer/executor/evaluator to ensure models are loaded before run."""
     try:
@@ -209,6 +237,10 @@ def main():
         # Warmup endpoints before each profile
         print(f"\n--- Warming up endpoints for {profile} ---")
         warmup_endpoints(profile)
+        _warmup_proposer(
+            str(Path(__file__).parent / "profiles.json"),
+            profile,
+        )
 
         # Create timestamped decisions file
         decisions_path = str(make_decisions_path(profile, run_stamp))

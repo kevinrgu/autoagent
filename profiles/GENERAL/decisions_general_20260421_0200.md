@@ -118,3 +118,88 @@ Accepted: 0/5 | Models: bifrost-t2-gemma4 -> gemma4:e4b -> bifrost-t2-gemma4
 **Evaluator:** 
 
 **Accepted:** NO
+
+## Cycle 6 -- 2026-04-21 06:37:02 UTC
+**Proposal:** PROPOSER_FAIL
+
+**Executor output:** 0 chars
+
+**Evaluator:** 
+
+**Accepted:** NO
+
+## Cycle 7 -- 2026-04-21 06:38:07 UTC
+**Proposal:** PROPOSER_FAIL
+
+**Executor output:** 0 chars
+
+**Evaluator:** 
+
+**Accepted:** NO
+
+## Cycle 8 -- 2026-04-21 06:39:14 UTC
+**Proposal:** PROPOSER_FAIL
+
+**Executor output:** 0 chars
+
+**Evaluator:** 
+
+**Accepted:** NO
+
+## Cycle 9 -- 2026-04-21 06:41:29 UTC
+**Proposal:** Use a **guard clause** to handle the clamping case first. This reduces nested logic and makes the "happy path" (returning the original string) flatter and easier to read.
+
+```python
+def _clamp_tier_for_mode(tier_str: str) -> str:
+    """In JARVIS_OFFLINE, refuse cloud tiers -- clamp to T2_5."""
+    from config import OperatingMode
+    
+    # Guard clause: Handle clamping explicitly
+    if settings.current_mode == OperatingMode.JARVIS_OFFLINE and tier_str in _CLOUD_TIER_STRINGS:
+        log.warning(f"JARVIS_OFFLINE: clamping cloud tier '{tier_str}' -> '2.5'")
+        return "2.5"
+
+    # Standard path: Validate and return
+    if tier_str not in _ALL_TIER_STRINGS:
+        log.warning(f"Unknown tier string '{tier_str}' detected in operating mode '{settings.current_mode}'. Valid options: {_ALL_
+
+**Executor output:** 295 chars
+
+**Evaluator:** REJECTED: executor renamed function _clamp_tier_for_mode -> main
+
+**Accepted:** NO
+
+## Cycle 9 -- 2026-04-21 06:41:29 UTC
+**Proposal:** Use a **guard clause** to handle the clamping case first. This reduces nested logic and makes the "happy path" (returning the original string) flatter and easier to read.
+
+```python
+def _clamp_tier_for_mode(tier_str: str) -> str:
+    """In JARVIS_OFFLINE, refuse cloud tiers -- clamp to T2_5."""
+    from config import OperatingMode
+    
+    # Guard clause: Handle clamping explicitly
+    if settings.current_mode == OperatingMode.JARVIS_OFFLINE and tier_str in _CLOUD_TIER_STRINGS:
+        log.warning(f"JARVIS_OFFLINE: clamping cloud tier '{tier_str}' -> '2.5'")
+        return "2.5"
+
+    # Standard path: Validate and return
+    if tier_str not in _ALL_TIER_STRINGS:
+        log.warning(f"Unknown tier string '{tier_str}' detected in operating mode '{settings.current_mode}'. Valid options: {_ALL_
+
+**Executor output:** 0 chars
+
+**Evaluator:** EXECUTOR/EVALUATOR FAIL after retries
+
+**Accepted:** NO
+
+## Cycle 10 -- 2026-04-21 06:42:36 UTC
+**Proposal:** PROPOSER_FAIL
+
+**Executor output:** 0 chars
+
+**Evaluator:** 
+
+**Accepted:** NO
+
+## Run Summary -- 2026-04-21 06:42 UTC
+Accepted: 0/10 | Models: bifrost-t2-gemma4 -> gemma4:e4b -> bifrost-t2-gemma4

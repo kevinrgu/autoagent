@@ -1,8 +1,8 @@
-morning_report.py — 2026-04-17 06:00:02
+morning_report.py — 2026-04-18 06:00:02
   Wrote C:\Users\jhpri\projects\autoagent\MORNING_REPORT.md
 
   Status: READY
-  Total cycles: 476  accepted: 132  rejected: 344  rate: 27.7%
+  Total cycles: 558  accepted: 156  rejected: 402  rate: 28.0%
   OK — OK: autopilot_graph.py
   OK — OK: subtask_graph.py
 

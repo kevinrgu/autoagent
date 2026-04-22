@@ -297,3 +297,103 @@ def _write_decisions_log(state: "AutopilotState", assembled_output: str, failed:
 **Evaluator:** All parallel candidates rejected: exec-hearth:eval-empty, exec-bifrost:syntax, exec-forge-t1:syntax, exec-forge-npu:syntax
 
 **Accepted:** NO
+
+## Cycle 7 -- 2026-04-22 07:00:22 UTC
+**Proposal:** Add logging to capture the result of the extraction. This will enhance traceability and debugging, especially when the full text is returned due to no code blocks being found.
+```python
+    def _extract_code(text: str) -> str:
+        """Extract fenced code blocks; fall back to full text if none found."""
+        if text is None:
+            raise ValueError("Input text cannot be None. Please ensure a string value is provided.")
+        if _re is None:
+            raise ImportError(
+                "The `re` module is required for `_extract_code` function. "
+                "Please ensure that the 're' module is available and correctly imported."
+            )
+        log.debug(f"Input text: {text}")
+        _B = chr(96) * 3  # type: str
+        blocks = _re.findall(_B + r"(?:python)?\n(.*
+
+**Executor output:** 0 chars
+
+**Evaluator:** All parallel candidates rejected: exec-hearth:eval-empty, exec-bifrost:eval-empty, exec-forge-npu:syntax, exec-forge-t1:eval-empty
+
+**Accepted:** NO
+
+## Cycle 8 -- 2026-04-22 07:03:07 UTC
+**Proposal:** Improve error message for when daily cloud cap is exceeded. This change increases the likelihood of generating more complete RFP responses by making error messages more descriptive, helping to pinpoint issues more quickly. The improved error message will also include the subtask ID and graph ID, providing more context for debugging.
+
+```python
+    if spec.assigned_tier in _CLOUD_TIER_STRINGS:
+        if check_daily_cap_exceeded(cap_usd=20.0):
+            from bifrost_message import SubtaskResult, compute_checksum
+            log.error(f"Daily cloud cap ($20.00) exceeded -- blocking cloud dispatch for subtask_id={spec.subtask_id}, graph_id={spec.graph_id}")
+            return SubtaskResult(
+                type="subtask_result",
+                subtask_id=spec.subtask_id,
+```
+
+Suggest ONE s
+
+**Executor output:** 2149 chars
+
+**Evaluator:** [exec-forge-t1/primary] PASS
+The change improves the error message by adding the `graph_id` to the log output, which provides better context for debugging when the cloud capacity limit is hit. This is a permitted change type (improving error messages) and does not violate any of the constraints (no new imports, no signature changes, no logic changes).
+
+VERDICT: ACCEPT
+
+**Accepted:** YES
+
+## Cycle 9 -- 2026-04-22 07:06:34 UTC
+**Proposal:** Add a guard clause to prevent invalid `cloud_cost` values. This helps ensure the integrity of the job registry data, improving the quality of the RFP responses.
+
+```python
+def _update_job_registry(graph_id: str, subtasks_completed: int, subtasks_total: int, cloud_cost: float,
+                         *, subtask_id: str | None = None, subtask_result: "SubtaskResult | None" = None) -> None:
+    """Best-effort live registry update — never raises."""
+    if subtasks_total <= 0:
+        log.warning(f"Invalid subtasks_total value: {subtasks_total} for graph_id {graph_id}")
+        return
+    if subtasks_completed < 0:
+        log.warning(f"Invalid subtasks_completed value: {subtasks_completed} for graph_id {graph_id}")
+        return
+    if cloud_cost < 0:
+        log.warning(f"Invalid cloud_cos
+
+**Executor output:** 2147 chars
+
+**Evaluator:** [exec-bifrost/primary] PASS
+The change correctly adds a guard clause to prevent negative `cloud_cost` values, following the existing pattern and constraints in the function.
+
+VERDICT: ACCEPT
+
+**Accepted:** YES
+
+## Cycle 10 -- 2026-04-22 07:09:09 UTC
+**Proposal:** Add logging for empty `_RFP_SIGNALS` to ensure this case is flagged during debugging, helping to maintain RFP output quality.
+
+```python
+def _is_rfp_task(prompt: str) -> bool:
+    """Return True if the prompt is an RFP/proposal writing task. Logs prompt and signals for debugging."""
+    if prompt is None:
+        log.warning("Received NoneType prompt. Assuming not an RFP task.")
+        return False
+    lower = prompt.lower()
+    if not _RFP_SIGNALS:
+        log.error("RFP signal list is empty. This should not happen unless _RFP_SIGNALS was not set.")
+        return False
+    log.debug(f"Checking prompt: {prompt}, signals: {_RFP_SIGNALS}")
+    return any(sig in lower for sig in _RFP_SIGNALS)
+```
+
+**Executor output:** 563 chars
+
+**Evaluator:** [exec-bifrost/primary] PASS
+The change improves the error message and increases the logging severity for a critical configuration failure (empty signal list), which falls within the allowed scope of improving error messages and logging.
+
+VERDICT: ACCEPT
+
+**Accepted:** YES
+
+## Run Summary -- 2026-04-22 07:10 UTC
+Accepted: 3/10 | Models: mistral-small3.1:24b -> mistral:7b-instruct-v0.3 -> bifrost-t2-gemma4

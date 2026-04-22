@@ -68,3 +68,10 @@
   general    OK        1156.3s
   research   OK         877.9s
   git commit: autoagent (decisions + logs)
+
+# Run 20260422_0200 — 2026-04-22T02:59:31.056490
+  coding     OK        1206.3s
+  general    OK        1048.2s
+  research   OK        1140.6s
+  git commit: bifrost-router (accepted target changes)
+  git commit: autoagent (decisions + logs)

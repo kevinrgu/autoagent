@@ -8,7 +8,7 @@
         "url": "http://192.168.2.33:11434/v1/chat/completions"
       },
       "executor": {
-        "model": "mistral:7b-instruct-v0.3-q4_0",
+        "model": "mistral:7b-instruct-v0.3",
         "url": "http://192.168.2.33:11434/v1/chat/completions"
       },
       "evaluator": {
@@ -73,7 +73,7 @@
         "url": "http://192.168.2.33:11434/v1/chat/completions"
       },
       "executor": {
-        "model": "mistral:7b-instruct-v0.3-q4_0",
+        "model": "mistral:7b-instruct-v0.3",
         "url": "http://192.168.2.33:11434/v1/chat/completions"
       },
       "evaluator": {
@@ -141,7 +141,7 @@
         "url": "http://192.168.2.33:11434/v1/chat/completions"
       },
       "executor": {
-        "model": "mistral:7b-instruct-v0.3-q4_0",
+        "model": "mistral:7b-instruct-v0.3",
         "url": "http://192.168.2.33:11434/v1/chat/completions"
       },
       "evaluator": {
@@ -207,6 +207,10 @@
   },
   "active": "coding",
   "_changelog": [
+    {
+      "date": "2026-04-22T00:19:18Z",
+      "change": "executor tag: mistral:7b-instruct-v0.3-q4_0 -> mistral:7b-instruct-v0.3 (warmup 404 fix)"
+    },
     {
       "date": "2026-04-21T23:26:23Z",
       "change": "executor_fleet: 3 primary (Bifrost/Hearth/ForgeT1) + 1 two-pass NPU (qwen3:1.7b). NPU output refined by mistral:7b-instruct-v0.3 before evaluator. Single executor field retained for backward compat until bifrost_cycle.py patched and gated-approved."

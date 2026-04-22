@@ -138,6 +138,14 @@ def warmup_endpoints(profile_name: str):
                 print(f"  warmup {role} ({model}): FAILED - {e}")
 
 
+def make_stdout_log_path(profile_name: str, run_stamp: str) -> Path:
+    """Create a timestamped stdout log path sibling to the decisions file."""
+    profile_upper = profile_name.upper()
+    log_file = SCRIPT_DIR / "profiles" / profile_upper / f"run_{profile_name}_{run_stamp}.log"
+    log_file.parent.mkdir(parents=True, exist_ok=True)
+    return log_file
+
+
 def make_decisions_path(profile_name: str, run_stamp: str) -> Path:
     """Create a timestamped decisions file path for this run."""
     profile_upper = profile_name.upper()
@@ -149,15 +157,23 @@ def make_decisions_path(profile_name: str, run_stamp: str) -> Path:
 
 
 def run_profile(profile: str, cycles: int, timeout: int,
-                decisions_path: str | None = None) -> dict:
-    """Run bifrost_cycle.py for a given profile with timeout."""
+                decisions_path: str | None = None,
+                stdout_log_path: str | None = None) -> dict:
+    """Run bifrost_cycle.py for a given profile with timeout.
+
+    When stdout_log_path is given, child stdout+stderr are redirected there
+    (line-buffered via python -u) so per-cycle diagnostics are preserved
+    for overnight post-mortems.
+    """
     print(f"\n{'='*60}")
     print(f"  OVERNIGHT: Starting profile={profile} cycles={cycles} timeout={timeout}s")
     print(f"  {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    if stdout_log_path:
+        print(f"  Stdout log: {stdout_log_path}")
     print(f"{'='*60}\n")
 
     cmd = [
-        sys.executable, str(CYCLE_SCRIPT),
+        sys.executable, "-u", str(CYCLE_SCRIPT),
         "--profile", profile,
         "--max-cycles", str(cycles),
     ]
@@ -165,11 +181,20 @@ def run_profile(profile: str, cycles: int, timeout: int,
         cmd.extend(["--decisions", decisions_path])
 
     t0 = time.time()
+    log_fh = None
     try:
+        if stdout_log_path:
+            log_fh = open(stdout_log_path, "wb")
+            stdout_target = log_fh
+            stderr_target = subprocess.STDOUT
+        else:
+            stdout_target = None
+            stderr_target = None
         result = subprocess.run(
             cmd,
             timeout=timeout,
-            capture_output=False,
+            stdout=stdout_target,
+            stderr=stderr_target,
             cwd=str(SCRIPT_DIR),
         )
         elapsed = time.time() - t0
@@ -178,6 +203,7 @@ def run_profile(profile: str, cycles: int, timeout: int,
             "returncode": result.returncode,
             "elapsed_s": round(elapsed, 1),
             "timed_out": False,
+            "stdout_log": stdout_log_path,
         }
     except subprocess.TimeoutExpired:
         elapsed = time.time() - t0
@@ -187,6 +213,7 @@ def run_profile(profile: str, cycles: int, timeout: int,
             "returncode": -1,
             "elapsed_s": round(elapsed, 1),
             "timed_out": True,
+            "stdout_log": stdout_log_path,
         }
     except Exception as e:
         elapsed = time.time() - t0
@@ -197,7 +224,14 @@ def run_profile(profile: str, cycles: int, timeout: int,
             "elapsed_s": round(elapsed, 1),
             "timed_out": False,
             "error": str(e),
+            "stdout_log": stdout_log_path,
         }
+    finally:
+        if log_fh is not None:
+            try:
+                log_fh.close()
+            except Exception:
+                pass
 
 
 def main():
@@ -245,9 +279,11 @@ def main():
 
         # Create timestamped decisions file
         decisions_path = str(make_decisions_path(profile, run_stamp))
+        stdout_log_path = str(make_stdout_log_path(profile, run_stamp))
         print(f"  Decisions: {decisions_path}")
 
-        result = run_profile(profile, args.cycles_per_profile, args.timeout, decisions_path)
+        result = run_profile(profile, args.cycles_per_profile, args.timeout,
+                             decisions_path, stdout_log_path)
         results.append(result)
         print(f"\n  >> {profile}: rc={result['returncode']} "
               f"elapsed={result['elapsed_s']}s "

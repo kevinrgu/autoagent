@@ -741,7 +741,12 @@ def run_cycle(cycle_num: int, objective: str, target_path: str,
             syn_ok, syn_err = syntax_check(code_to_check)
             if not syn_ok:
                 rejection_reasons.append(f"{label}:syntax")
-                print(f"  [Executor/{label}] Syntax FAIL: {syn_err[:80]}")
+                print(f"  [Executor/{label}/{trust}] Syntax FAIL: {syn_err[:80]}")
+                # DIAG: first 200 chars of the offending code (newlines
+                # flattened to \n) so overnight logs capture what the
+                # executor actually produced post strip_fences.
+                sample = (new_code or "")[:200].replace("\n", "\\n")
+                print(f"  [Executor/{label}/{trust}] syntax-fail sample: {sample!r}")
                 continue
 
             try:

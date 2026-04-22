@@ -25,7 +25,7 @@ SMOKE_CANARY_PORT = 18089
 def _run(cmd: list[str], cwd: Path | None = None, timeout: int = 120) -> tuple[int, str, str]:
     """Run a command, return (exit_code, stdout, stderr)."""
     try:
-        r = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, timeout=timeout)
+        r = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, timeout=timeout, encoding="utf-8", errors="replace")
         return r.returncode, r.stdout, r.stderr
     except subprocess.TimeoutExpired:
         return -1, "", f"TIMEOUT after {timeout}s"

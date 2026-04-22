@@ -79,7 +79,23 @@ def call_llm(url: str, model: str, system: str, user: str,
     }
     r = httpx.post(url, json=payload, timeout=TIMEOUT)
     r.raise_for_status()
-    return r.json()["choices"][0]["message"]["content"]
+    data = r.json()
+    choice = data["choices"][0]
+    msg = choice["message"]
+    content = msg.get("content") or ""
+    if not content.strip():
+        # Reasoning-model fallback: some models (gemma4-reasoning, etc.)
+        # spend the full token budget on `reasoning` and emit empty
+        # content when budget runs out mid-thought. Returning reasoning
+        # preserves the signal for downstream callers that would otherwise
+        # see an empty string and log spurious eval-empty rejections.
+        reasoning = msg.get("reasoning") or ""
+        finish = choice.get("finish_reason", "?")
+        if reasoning.strip():
+            print(f"  [call_llm] empty content (finish={finish}) "
+                  f"-> reasoning fallback ({len(reasoning)} chars)")
+            return reasoning
+    return content
 
 
 # ============================================================================
@@ -803,10 +819,14 @@ def run_cycle(cycle_num: int, objective: str, target_path: str,
                 )
             t_eval = time.time()
             try:
+                # max_tokens=4096: evaluator is a reasoning model
+                # (bifrost-t2-gemma4) whose `reasoning` field consumes 3-7x
+                # the tokens of `content`. 1500 was exhausted by reasoning
+                # on harder candidates, leaving content empty -> eval-empty.
                 evaluation = call_llm(
                     EVALUATOR_URL, EVALUATOR_MODEL,
                     eval_system, eval_user,
-                    num_ctx=ACTIVE_NUM_CTX, max_tokens=1500,
+                    num_ctx=ACTIVE_NUM_CTX, max_tokens=4096,
                 )
             except Exception as e:
                 rejection_reasons.append(f"{label}:eval-err")

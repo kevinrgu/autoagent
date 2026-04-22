@@ -60,7 +60,7 @@
           "two_pass": {
             "refiner_model": "mistral:7b-instruct-v0.3",
             "refiner_url": "http://192.168.2.33:11434/v1/chat/completions",
-            "refiner_note": "Fix function name, syntax errors. Preserve logic. Output corrected function only."
+            "refiner_note": "Fix function name, syntax errors. Preserve logic. Output corrected function only. Output raw Python only — no markdown fences (no ```python, no ```), no preamble, no postamble. Start with def, async def, import, or a bare statement."
           }
         }
       ]
@@ -128,7 +128,7 @@
           "two_pass": {
             "refiner_model": "mistral:7b-instruct-v0.3",
             "refiner_url": "http://192.168.2.33:11434/v1/chat/completions",
-            "refiner_note": "Fix function name, syntax errors. Preserve logic. Output corrected function only."
+            "refiner_note": "Fix function name, syntax errors. Preserve logic. Output corrected function only. Output raw Python only — no markdown fences (no ```python, no ```), no preamble, no postamble. Start with def, async def, import, or a bare statement."
           }
         }
       ]
@@ -199,7 +199,7 @@
           "two_pass": {
             "refiner_model": "mistral:7b-instruct-v0.3",
             "refiner_url": "http://192.168.2.33:11434/v1/chat/completions",
-            "refiner_note": "Fix function name, syntax errors. Preserve logic. Output corrected function only."
+            "refiner_note": "Fix function name, syntax errors. Preserve logic. Output corrected function only. Output raw Python only — no markdown fences (no ```python, no ```), no preamble, no postamble. Start with def, async def, import, or a bare statement."
           }
         }
       ]
@@ -207,6 +207,10 @@
   },
   "active": "coding",
   "_changelog": [
+    {
+      "date": "2026-04-22T13:34:42Z",
+      "change": "P0 fix: refiner_note fence-strip instruction appended to all 3 NPU P2 refiners. Addresses 82% NPU syntax-fail rate from Session O-PARALLEL + overnight 04-22 (9/11 failures were fenced-output leaks from qwen3:1.7b P1)."
+    },
     {
       "date": "2026-04-22T00:19:18Z",
       "change": "executor tag: mistral:7b-instruct-v0.3-q4_0 -> mistral:7b-instruct-v0.3 (warmup 404 fix)"

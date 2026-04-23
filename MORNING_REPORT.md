@@ -1,6 +1,6 @@
 # BIFROST Morning Report
 
-**Generated:** 2026-04-21 06:00:01  
+**Generated:** 2026-04-22 06:00:01  
 **Status:** READY
 
 ---
@@ -8,20 +8,6 @@
 ## Overnight Run Summary
 
 ```
-# Run 20260417_0200 — 2026-04-17T02:42:54.629190
-  coding     OK         991.2s
-  general    OK         737.7s
-  research   OK         644.2s
-  git commit: bifrost-router (accepted target changes)
-  git commit: autoagent (decisions + logs)
-
-# Run 20260417_0200 — 2026-04-17T03:23:10.194534
-  coding     OK        1488.3s
-  general    OK        1937.5s
-  research   OK        1372.3s
-  git commit: bifrost-router (accepted target changes)
-  git commit: autoagent (decisions + logs)
-
 # Run 20260418_0200 — 2026-04-18T03:09:47.634373
   coding     OK         718.1s
   general    OK        1516.2s
@@ -48,6 +34,20 @@
   general    OK        1156.3s
   research   OK         877.9s
   git commit: autoagent (decisions + logs)
+
+# Run 20260422_0200 — 2026-04-22T02:59:31.056490
+  coding     OK        1206.3s
+  general    OK        1048.2s
+  research   OK        1140.6s
+  git commit: bifrost-router (accepted target changes)
+  git commit: autoagent (decisions + logs)
+
+# Run 20260422_0200 — 2026-04-22T03:36:39.211450
+  coding     OK        2250.4s
+  general    OK        1881.6s
+  research   OK        1488.5s
+  git commit: bifrost-router (accepted target changes)
+  git commit: autoagent (decisions + logs)
 ```
 
 ---
@@ -56,10 +56,10 @@
 
 | Profile | Accepted | Rejected | Total | Accept Rate |
 |---------|----------|----------|-------|-------------|
-| CODING   |       58 |      269 |   327 |       17.7% |
-| GENERAL  |       58 |      110 |   168 |       34.5% |
-| RESEARCH |       47 |      115 |   162 |       29.0% |
-| **TOTAL** |      163 |      494 |   657 |       24.8% |
+| CODING   |       62 |      281 |   343 |       18.1% |
+| GENERAL  |       62 |      122 |   184 |       33.7% |
+| RESEARCH |       50 |      132 |   182 |       27.5% |
+| **TOTAL** |      174 |      535 |   709 |       24.5% |
 
 ---
 
@@ -72,6 +72,6 @@
 
 ## Raw Decisions Files Found
 
-- **CODING**: decisions_coding.md, decisions_coding_20260415_0200.md, decisions_coding_20260416_0200.md, decisions_coding_20260417_0200.md, decisions_coding_20260418_0200.md, decisions_coding_20260421_0200.md, decisions_coding_3m_mistral.md, decisions_coding_3machine.md, decisions_coding_final.md, decisions_coding_gemma4.md, decisions_coding_multi.md, decisions_coding_qwen3eval.md, decisions_coding_training.md, decisions_coding_training2.md, decisions_isolation_test.md, decisions_isolation_test2.md, decisions_postfix.md, decisions_qwen36_ab_2133.md
-- **GENERAL**: decisions_general.md, decisions_general_20260415_0200.md, decisions_general_20260416_0200.md, decisions_general_20260417_0200.md, decisions_general_20260418_0200.md, decisions_general_20260421_0200.md, decisions_general_final.md, decisions_general_training.md
-- **RESEARCH**: decisions_research.md, decisions_research_20260415_0200.md, decisions_research_20260416_0200.md, decisions_research_20260417_0200.md, decisions_research_20260418_0200.md, decisions_research_20260421_0200.md
+- **CODING**: decisions_coding.md, decisions_coding_20260415_0200.md, decisions_coding_20260416_0200.md, decisions_coding_20260417_0200.md, decisions_coding_20260418_0200.md, decisions_coding_20260421_0200.md, decisions_coding_20260422_0200.md, decisions_coding_3m_mistral.md, decisions_coding_3machine.md, decisions_coding_final.md, decisions_coding_gemma4.md, decisions_coding_multi.md, decisions_coding_qwen3eval.md, decisions_coding_training.md, decisions_coding_training2.md, decisions_isolation_test.md, decisions_isolation_test2.md, decisions_postfix.md, decisions_qwen36_ab_2133.md
+- **GENERAL**: decisions_general.md, decisions_general_20260415_0200.md, decisions_general_20260416_0200.md, decisions_general_20260417_0200.md, decisions_general_20260418_0200.md, decisions_general_20260421_0200.md, decisions_general_20260422_0200.md, decisions_general_final.md, decisions_general_training.md
+- **RESEARCH**: decisions_research.md, decisions_research_20260415_0200.md, decisions_research_20260416_0200.md, decisions_research_20260417_0200.md, decisions_research_20260418_0200.md, decisions_research_20260421_0200.md, decisions_research_20260422_0200.md

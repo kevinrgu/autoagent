@@ -6,168 +6,272 @@ BIFROST Session O -- Local 3-Agent Cycle
   Objective: Improve the research pipeline by modifying ONLY these functions in subtask_graph.py: `route_after_execute`, `_verify_lev
   Target:    D:\Projects\bifrost-router\subtask_graph.py
   Decisions: C:\Users\jhpri\projects\autoagent\profiles\RESEARCH\decisions_research_20260423_0200.md
-  Cycles:    5
+  Cycles:    10
   num_ctx:   32768
   [Backup] subtask_graph.py -> subtask_graph.py.bak
 
   [Warmup] Pre-loading models with keep_alive=15m ...
-  [Warmup] Proposer (mistral-small3.1:24b): 200 (27s)
-  [Warmup] Executor (mistral:7b-instruct-v0.3): 200 (11s)
+  [Warmup] Proposer (mistral-small3.1:24b): 200 (1s)
+  [Warmup] Executor (mistral:7b-instruct-v0.3): 200 (10s)
   [Warmup] Evaluator (bifrost-t2-gemma4): 200 (1s)
 
 ============================================================
   CYCLE 1
 ============================================================
-  [TargetFn] route_after_escalate (21 lines, line 1000-1020)
+  [TargetFn] route_after_execute (13 lines, line 970-982)
 
   [Proposer] mistral-small3.1:24b @ Bifrost ...
-  [Proposer] 835 chars (52s)
-  Preview: The `route_after_escalate` function should specify type hints for parameters and return values to enhance code clarity.
-
-```python
-from typing import Dict
-
-def route_after_escalate(state: Dict) -> str:
-    if state.get("error"):
-        log.error(
-            "Escalation failed. Error: %s. "
-       ...
+  [Proposer] 457 chars (30s)
+  Preview: Change the return values to `Literal["failed", "verify"]` to prevent accidental misuse of the function and improve clarity. Type hints promote better maintainability and reduce the risk of errors. This change enhances the research pipeline's quality by providing clearer contracts for function intera...
   [Executor] parallel fan-out across 4 nodes
-  [Executor/exec-forge-t1] 683 chars in 3.5s
-  [Executor/exec-forge-npu/P1] 683 chars in 4.4s
-  [Executor/exec-hearth] 929 chars in 7.4s
-  [Executor/exec-bifrost] 688 chars in 12.6s
-  [Executor/exec-forge-npu/P2] 947 chars total in 15.4s
-  [Evaluator/exec-forge-t1] 379 chars (50.6s) -> REJECT
-  [Executor/exec-hearth/primary] Syntax FAIL: File "C:\Users\jhpri\AppData\Local\Temp\tmp4ra_jhcn.py", line 1021
+  [Executor/exec-forge-t1] 324 chars in 2.1s
+  [Executor/exec-forge-npu/P1] 141 chars in 2.3s
+  [Executor/exec-hearth] 463 chars in 4.1s
+  [Executor/exec-bifrost] 463 chars in 11.8s
+  [Executor/exec-forge-npu/P2] 605 chars total in 13.6s
+  [Executor/exec-forge-t1/primary] Syntax FAIL: File "C:\Users\jhpri\AppData\Local\Temp\tmpsoraa3cm.py", line 1052
+    """
+    ^
+  [Executor/exec-forge-t1/primary] syntax-fail sample: 'def route_after_execute(state: SubtaskState) -> Literal["failed", "verify"]:\\n    """\\n    Determines the next route in the execution pipeline based on the state of subtask.\\n\\n    Parameters:\\n    state ('
+  [Evaluator/exec-hearth] 440 chars (32.4s) -> REJECT
+  [Evaluator/exec-bifrost] 233 chars (28.0s) -> REJECT
+  [Executor/exec-forge-npu/two_pass] Syntax FAIL: File "C:\Users\jhpri\AppData\Local\Temp\tmppl90icup.py", line 972
     ```
     ^
-  [Executor/exec-hearth/primary] syntax-fail sample: 'def route_after_escalate(state: Dict[str, int]) -> str:\\n    if state.get("error"):\\n        logging.error(\\n            "Escalation failed. Error: %s. "\\n            "Current state: Attempt Count=%d, Tie'
-  [Evaluator/exec-bifrost] 332 chars (25.6s) -> REJECT
-  [Executor/exec-forge-npu/two_pass] Syntax FAIL: File "C:\Users\jhpri\AppData\Local\Temp\tmp7n6bi9ys.py", line 1021
-    I added `
-  [Executor/exec-forge-npu/two_pass] syntax-fail sample: 'def route_after_escalate(state):\\n    if state.get("error"):\\n        logging.error(\\n            "Escalation failed. Error: %s. "\\n            "Current state: Attempt Count={}, Tier History={}, Context={'
+
+  [Executor/exec-forge-npu/two_pass] syntax-fail sample: 'def route_after_execute(state: dict) -> Literal["failed", "verify"]:\\n    return "verify" if not state.get("error", True) else "failed"\\n```\\n\\nThe changes made are as follows:\\n\\n1. Function name was renam'
   [Cycle 1] all 4 candidates rejected
 
 ============================================================
   CYCLE 2
 ============================================================
-  [TargetFn] _call_tier (52 lines, line 294-345)
+  [TargetFn] _aio_sandbox_check (28 lines, line 411-438)
 
   [Proposer] mistral-small3.1:24b @ Bifrost ...
-  [Proposer] 2349 chars (118s)
-  Preview: To improve error handling and make the function more robust, add logging for successful API calls. This will provide better visibility into the operations performed by the code and aid in debugging if necessary.
-
-```python
-async def _call_tier(
-    tier_str: str,
-    messages: list[dict],
-    think:...
+  [Proposer] 1987 chars (81s)
+  Preview: Change the `404 error` response to a `HTTP error` response and add logging for `404 status codes`. This will ensure logs are consistent — all HTTP status codes resulting in `None` return are logged as such. It will improve research output depth and correctness if this 404 is mistaken for a different...
   [Executor] parallel fan-out across 4 nodes
-  [Executor/exec-forge-t1] 1395 chars in 7.6s
-  [Executor/exec-forge-npu/P1] 2034 chars in 11.5s
-  [Executor/exec-hearth] 2204 chars in 18.8s
-  [Executor/exec-bifrost] 2486 chars in 26.9s
-  [Executor/exec-forge-npu/P2] 1248 chars total in 31.6s
-  [Executor/exec-forge-t1/primary] Syntax FAIL: File "C:\Users\jhpri\AppData\Local\Temp\tmp83uqslhs.py", line 324
-    result = a
-  [Executor/exec-forge-t1/primary] syntax-fail sample: 'async def _call_tier(\\n    tier_str: str,\\n    messages: list[dict],\\n    think: bool = False,\\n) -> tuple[str, str, int, float]:\\n    """Call a tier backend. Returns (response_text, raw_text, tokens_used,'
-  [Evaluator/exec-hearth] 380 chars (52.6s) -> ACCEPT
-  [Apply/exec-hearth] Spliced isolated function _call_tier into subtask_graph.py
-  [Cycle 2] ACCEPTED via exec-hearth (primary, 18.8s)
+  [Executor/exec-forge-t1] 1575 chars in 7.0s
+  [Executor/exec-forge-npu/P1] 1380 chars in 7.9s
+  [Executor/exec-hearth] 1511 chars in 11.4s
+  [Executor/exec-bifrost] 2010 chars in 18.5s
+  [Executor/exec-forge-npu/P2] 1564 chars total in 23.5s
+  [Evaluator/exec-forge-t1] 1060 chars (63.9s) -> REJECT
+  [Evaluator/exec-hearth] 253 chars (57.8s) -> ACCEPT
+  [Apply/exec-hearth] Spliced isolated function _aio_sandbox_check into subtask_graph.py
+  [Cycle 2] ACCEPTED via exec-hearth (primary, 11.4s)
 
 ============================================================
   CYCLE 3
 ============================================================
-  [TargetFn] distill_subtask_node (16 lines, line 863-878)
+  [TargetFn] write_execution_trace (23 lines, line 74-96)
 
   [Proposer] mistral-small3.1:24b @ Bifrost ...
-  [Proposer] 990 chars (67s)
-  Preview: Improve error message by specifying the exact key `context_accumulator` that is missing to help debugging. Change the warning log level to error to reflect the severity of the issue.
+  [Proposer] 1130 chars (58s)
+  Preview: Change: Improve error handling to log exceptions.
 
 ```python
-def distill_subtask_node(state: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Compress escalation context...
+def write_execution_trace(spec, result, tier: str):
+    """Write L5 PASS execution trace to evals/execution_traces.jsonl."""
+    import json, os
+    from datetime import datetime, timezone
+    from pathlib import Path as _P
+    td = _P(os....
   [Executor] parallel fan-out across 4 nodes
-  [Executor/exec-forge-t1] 384 chars in 3.5s
-  [Executor/exec-forge-npu/P1] 507 chars in 4.5s
-  [Executor/exec-hearth] 653 chars in 6.5s
-  [Executor/exec-bifrost] 725 chars in 12.9s
-  [Executor/exec-forge-npu/P2] 886 chars total in 15.8s
-  [Evaluator/exec-forge-t1] 490 chars (57.4s) -> REJECT
-  [Evaluator/exec-hearth] 728 chars (78.1s) -> REJECT
-  [call_llm] empty content (finish=length) -> reasoning fallback (16027 chars)
-  [Evaluator/exec-bifrost] 16027 chars (115.3s) -> REJECT
-  [Evaluator/exec-forge-npu] 878 chars (69.0s) -> REJECT
-  [Cycle 3] all 4 candidates rejected
+  [Executor/exec-forge-t1] 1070 chars in 5.4s
+  [Executor/exec-forge-npu/P1] 1065 chars in 6.6s
+  [Executor/exec-hearth] 1198 chars in 10.2s
+  [Executor/exec-bifrost] 1075 chars in 12.8s
+  [Executor/exec-forge-npu/P2] 1424 chars total in 17.5s
+  [Evaluator/exec-forge-t1] 20 chars (22.1s) -> ACCEPT
+  [Apply/exec-forge-t1] Spliced isolated function write_execution_trace into subtask_graph.py
+  [Cycle 3] ACCEPTED via exec-forge-t1 (primary, 5.4s)
 
 ============================================================
   CYCLE 4
 ============================================================
-  [TargetFn] failed_node (30 lines, line 931-960)
+  [TargetFn] _aio_sandbox_check (31 lines, line 411-441)
 
   [Proposer] mistral-small3.1:24b @ Bifrost ...
-  [Proposer] 1456 chars (82s)
-  Preview: Add a `log.debug()` statement to log the details of the failed subtask for traceability.
-
+  [Proposer] 415 chars (36s)
+  Preview: Add a type hint to `payload` to improve clarity. This helps with code readability and aids in catching potential type errors during development.
 ```python
-def failed_node(state: SubtaskState) -> dict:
-    """Terminal failure -- exceeded loop budget or escalation exhausted."""
+async def _aio_sandbox_check(url: str, payload: dict[str, Any]) -> dict | None:
+    """POST payload to AIO Sandbox endpoint.
 
-    # Log details of the failed subtask for traceability
-    log.debug("Subta...
+    Returns respons...
   [Executor] parallel fan-out across 4 nodes
-  [Executor/exec-forge-t1] 1313 chars in 8.2s
-  [Executor/exec-forge-npu/P1] 1293 chars in 8.7s
-  [Executor/exec-bifrost] 422 chars in 11.6s
-  [Executor/exec-hearth] 1390 chars in 11.8s
-  [Executor/exec-forge-npu/P2] 1602 chars total in 16.8s
-  [call_llm] empty content (finish=length) -> reasoning fallback (14675 chars)
-  [Evaluator/exec-forge-t1] 14675 chars (142.3s) -> REJECT
-  [Executor/exec-bifrost/primary] Syntax FAIL: File "C:\Users\jhpri\AppData\Local\Temp\tmps_w9_lzl.py", line 937
-    ```
-    ^
-
-  [Executor/exec-bifrost/primary] syntax-fail sample: 'def failed_node(state: SubtaskState) -> dict:\\n    """Terminal failure -- exceeded loop budget or escalation exhausted."""\\n\\n    logging.debug("Subtask %s failed in state %s", state["spec"].subtask_id, '
-  [call_llm] empty content (finish=length) -> reasoning fallback (15282 chars)
-  [Evaluator/exec-hearth] 15282 chars (134.2s) -> REJECT
-  [Executor/exec-forge-npu/two_pass] Syntax FAIL: File "C:\Users\jhpri\AppData\Local\Temp\tmp82jpny7m.py", line 962
-    ```
-    ^
-
-  [Executor/exec-forge-npu/two_pass] syntax-fail sample: 'def failed_node(state: SubtaskState) -> dict:\\n    """Terminal failure -- exceeded loop budget or escalation exhausted."""\\n    log.debug("Subtask %s failed in state %s", state[\'spec\'][\'subtask_id\'], st'
-  [Cycle 4] all 4 candidates rejected
+  [Executor/exec-forge-t1] 1521 chars in 6.7s
+  [Executor/exec-forge-npu/P1] 1515 chars in 8.2s
+  [Executor/exec-hearth] 1521 chars in 10.5s
+  [Executor/exec-bifrost] 1717 chars in 14.5s
+  [Executor/exec-forge-npu/P2] 1551 chars total in 19.4s
+  [Evaluator/exec-forge-t1] 885 chars (88.0s) -> REJECT
+  [Evaluator/exec-hearth] 442 chars (90.4s) -> ACCEPT
+  [Apply/exec-hearth] Spliced isolated function _aio_sandbox_check into subtask_graph.py
+  [Cycle 4] ACCEPTED via exec-hearth (primary, 10.5s)
 
 ============================================================
   CYCLE 5
 ============================================================
-  [TargetFn] _vega8_qm_pass1 (44 lines, line 112-155)
+  [TargetFn] run_subtask (31 lines, line 1053-1083)
 
   [Proposer] mistral-small3.1:24b @ Bifrost ...
-  [Proposer] 435 chars (36s)
-  Preview: To improve error handling and provide clearer diagnostics, add a log statement to capture exceptions. This will enhance traceability and aid in debugging without altering the control flow or introducing new dependencies.
+  [Proposer] 1770 chars (87s)
+  Preview: To avoid incomplete or misleading logs when `result` is `None` or missing `escalation_artifact`, add a guard clause to only update `result` when `result.escalation_artifact` is a dictionary. This ensures that logs reflect the actual state and avoids potential attribute errors.
 
-```python
-    except Exception as e:
-        log.error("Error during _vega8_qm...
+Here's the improved c...
   [Executor] parallel fan-out across 4 nodes
-  [Executor/exec-hearth] 623 chars in 8.5s
-  [Executor/exec-forge-t1] 2007 chars in 17.2s
-  [Executor/exec-forge-npu/P1] 1903 chars in 18.5s
-  [Executor/exec-bifrost] 2090 chars in 20.2s
-  [Executor/exec-forge-npu/P2] 2020 chars total in 27.7s
-  [call_llm] empty content (finish=length) -> reasoning fallback (14808 chars)
-  [Evaluator/exec-hearth] 14808 chars (97.3s) -> REJECT
-  [Evaluator/exec-forge-t1] 389 chars (51.4s) -> REJECT
-  [Evaluator/exec-bifrost] 752 chars (29.1s) -> REJECT
-  [Executor/exec-forge-npu/two_pass] Syntax FAIL: File "C:\Users\jhpri\AppData\Local\Temp\tmp05gzilf9.py", line 159
+  [Executor/exec-forge-t1] 1414 chars in 6.6s
+  [Executor/exec-forge-npu/P1] 1390 chars in 7.8s
+  [Executor/exec-hearth] 1453 chars in 11.7s
+  [Executor/exec-bifrost] 1457 chars in 15.0s
+  [Executor/exec-forge-npu/P2] 1274 chars total in 19.1s
+  [call_llm] empty content (finish=length) -> reasoning fallback (15683 chars)
+  [Evaluator/exec-forge-t1] 15683 chars (91.9s) -> REJECT
+  [Evaluator/exec-hearth] 901 chars (91.2s) -> REJECT
+  [Evaluator/exec-bifrost] 492 chars (81.8s) -> REJECT
+  [Executor/exec-forge-npu/two_pass] Syntax FAIL: File "C:\Users\jhpri\AppData\Local\Temp\tmp1ivwn8lm.py", line 1079
     ```
     ^
-
-  [Executor/exec-forge-npu/two_pass] syntax-fail sample: 'def _vega8_qm_pass1(spec_description: str, output: str) -> dict:\\n    import httpx as _httpx_qm\\n\\n    prompt = (\\n        f"Review this output for the given task. Use Role 1 (CONSENSUS VERIFICATION) form'
+  [Executor/exec-forge-npu/two_pass] syntax-fail sample: 'def run_subtask(spec: SubtaskSpec) -> SubtaskResult:\\n    """Run a single subtask to completion. Returns SubtaskResult."""\\n    logging.info(f\'Starting subtask execution for spec: {spec}\')\\n    initial ='
   [Cycle 5] all 4 candidates rejected
 
 ============================================================
-  SESSION COMPLETE: 1/5 accepted
+  CYCLE 6
+============================================================
+  [TargetFn] failed_node (30 lines, line 934-963)
+
+  [Proposer] mistral-small3.1:24b @ Bifrost ...
+  [Proposer] 1437 chars (74s)
+  Preview: Change the condition `if not result` to `if result is None` for better clarity and safety. Log the failure state for debugging.
+```python
+def failed_node(state: SubtaskState) -> dict:
+    """Terminal failure -- exceeded loop budget or escalation exhausted."""
+    result = state.get("result")
+    if ...
+  [Executor] parallel fan-out across 4 nodes
+  [Executor/exec-forge-t1] 1295 chars in 6.2s
+  [Executor/exec-forge-npu/P1] 1291 chars in 7.6s
+  [Executor/exec-hearth] 1295 chars in 11.2s
+  [Executor/exec-bifrost] 1295 chars in 15.2s
+  [Executor/exec-forge-npu/P2] 1535 chars total in 20.0s
+  [call_llm] empty content (finish=length) -> reasoning fallback (14453 chars)
+  [Evaluator/exec-forge-t1] 14453 chars (92.6s) -> REJECT
+  [call_llm] empty content (finish=length) -> reasoning fallback (14926 chars)
+  [Evaluator/exec-hearth] 14926 chars (92.8s) -> REJECT
+  [call_llm] empty content (finish=length) -> reasoning fallback (15250 chars)
+  [Evaluator/exec-bifrost] 15250 chars (92.8s) -> REJECT
+  [Executor/exec-forge-npu/two_pass] Syntax FAIL: File "C:\Users\jhpri\AppData\Local\Temp\tmp_lsf0a0v.py", line 961
+    3. Updated
+  [Executor/exec-forge-npu/two_pass] syntax-fail sample: 'def failed_node(state: SubtaskState) -> dict:\\n    result = state.get("result", SubtaskResult(output="", output_checksum=compute_checksum("")))\\n    output = result.output if result.output is not None e'
+  [Cycle 6] all 4 candidates rejected
+
+============================================================
+  CYCLE 7
+============================================================
+  [TargetFn] _embed_text (26 lines, line 352-377)
+
+  [Proposer] mistral-small3.1:24b @ Bifrost ...
+  [Proposer] 1862 chars (83s)
+  Preview: Add a guard clause to explicitly validate the content of the `text` parameter to ensure it is a string before proceeding. This checks the input type early and improves the safety and robustness of the embedding process.
+
+```python
+async def _embed_text(text: str) -> list[float]:
+    """Embeds text u...
+  [Executor] parallel fan-out across 4 nodes
+  [Executor/exec-forge-t1] 1475 chars in 7.6s
+  [Executor/exec-forge-npu/P1] 1626 chars in 9.8s
+  [Executor/exec-hearth] 1768 chars in 14.3s
+  [Executor/exec-bifrost] 1996 chars in 16.2s
+  [Executor/exec-forge-npu/P2] 1290 chars total in 20.5s
+  [Evaluator/exec-forge-t1] 1132 chars (65.6s) -> REJECT
+  [Evaluator/exec-hearth] 492 chars (68.5s) -> REJECT
+  [Executor/exec-bifrost/primary] Syntax FAIL: File "C:\Users\jhpri\AppData\Local\Temp\tmpaxmsy27n.py", line 383
+    ```
+    ^
+
+  [Executor/exec-bifrost/primary] syntax-fail sample: 'async def _embed_text(text: str) -> list[float]:\\n    """Embeds text using the Hearth Vega 8 nomic-embed-text model via a specified API endpoint.\\n\\n    Returns the embedded vector as a list of floats.\\n '
+  [Executor/exec-forge-npu/two_pass] Syntax FAIL: File "C:\Users\jhpri\AppData\Local\Temp\tmple4h94rw.py", line 366
+    async with
+  [Executor/exec-forge-npu/two_pass] syntax-fail sample: 'def _embed_text(text: str) -> list[float]:\\n    import httpx\\n    import logging\\n\\n    log = logging.getLogger(__name__)\\n\\n    if not isinstance(text, str):\\n        log.error("Input text is not a string")'
+  [Cycle 7] all 4 candidates rejected
+
+============================================================
+  CYCLE 8
+============================================================
+  [TargetFn] _embed_text (26 lines, line 352-377)
+
+  [Proposer] mistral-small3.1:24b @ Bifrost ...
+  [Proposer] 1917 chars (86s)
+  Preview: WHAT: Add a type hint for the `text` parameter and improve the error message to include the model name.
+WHY: This enhances clarity and debugging by explicitly stating the expected type and providing more context in error messages, which is crucial for maintaining research pipeline quality.
+
+```pytho...
+  [Executor] parallel fan-out across 4 nodes
+  [Executor/exec-forge-t1] 1975 chars in 9.5s
+  [Executor/exec-forge-npu/P1] 1600 chars in 10.2s
+  [Executor/exec-hearth] 1734 chars in 14.4s
+  [Executor/exec-bifrost] 1645 chars in 15.5s
+  [Executor/exec-forge-npu/P2] 1632 chars total in 20.9s
+  [Evaluator/exec-forge-t1] 1192 chars (30.3s) -> REJECT
+  [Evaluator/exec-hearth] 392 chars (15.2s) -> REJECT
+  [Evaluator/exec-bifrost] 437 chars (13.4s) -> REJECT
+  [Executor/exec-forge-npu/two_pass] Syntax FAIL: File "C:\Users\jhpri\AppData\Local\Temp\tmphv9ch2vh.py", line 374
+    ```
+    ^
+
+  [Executor/exec-forge-npu/two_pass] syntax-fail sample: 'def _embed_text(text: str) -> list[float]:\\n    import httpx\\n    import logging\\n\\n    text_length = len(text)\\n    logging.info(f"Embedding text: {text[:50]}... [length: {text_length}]")\\n    url = "http:'
+  [Cycle 8] all 4 candidates rejected
+
+============================================================
+  CYCLE 9
+============================================================
+  [TargetFn] _distill_async (48 lines, line 884-931)
+
+  [Proposer] mistral-small3.1:24b @ Bifrost ...
+  [Proposer] 513 chars (35s)
+  Preview: Add a guard clause to return early if context or spec is invalid to ensure robustness and improve error handling in the `_distill_async` function. This change prevents unnecessary processing when the input state is not suitable for distillation.
+```python
+async def _distill_async(state: SubtaskState...
+  [Executor] parallel fan-out across 4 nodes
+  [Executor/exec-forge-t1] 1931 chars in 9.3s
+  [Executor/exec-forge-npu/P1] 1952 chars in 11.1s
+  [Executor/exec-hearth] 2012 chars in 15.0s
+  [Executor/exec-bifrost] 2071 chars in 16.8s
+  [Executor/exec-forge-npu/P2] 2266 chars total in 24.2s
+  [Evaluator/exec-forge-t1] 597 chars (74.1s) -> REJECT
+  [Evaluator/exec-hearth] 434 chars (33.1s) -> REJECT
+  [Evaluator/exec-bifrost] 640 chars (37.5s) -> REJECT
+  [Executor/exec-forge-npu/two_pass] Syntax FAIL: File "C:\Users\jhpri\AppData\Local\Temp\tmpti32am3a.py", line 932
+    - Updated 
+  [Executor/exec-forge-npu/two_pass] syntax-fail sample: 'async def _distill_async(state: dict) -> dict:\\n    if not state.get("context_accumulator"):\\n        return {"context_accumulator": []}\\n\\n    prior_attempts = "\\n\\n".join(\\n        f"Attempt {i+1} (tier '
+  [Cycle 9] all 4 candidates rejected
+
+============================================================
+  CYCLE 10
+============================================================
+  [TargetFn] _query_kb (21 lines, line 448-468)
+
+  [Proposer] mistral-small3.1:24b @ Bifrost ...
+  [Proposer] 1113 chars (55s)
+  Preview: Add a warning log when an error occurs in `_query_kb`.
+Why? To enhance observability and troubleshooting of the research pipeline.
+```python
+async def _query_kb(topic: str, top_k: int = 3) -> list[str]:
+    """Query bifrost-kb /retrieve at Hearth :8091, return top_k text chunks.
+
+    Schema: {"quest...
+  [Executor] parallel fan-out across 4 nodes
+  [Executor/exec-forge-t1] 968 chars in 5.3s
+  [Executor/exec-forge-npu/P1] 1076 chars in 6.9s
+  [Executor/exec-hearth] 1094 chars in 10.1s
+  [Executor/exec-bifrost] 1046 chars in 14.0s
+  [Executor/exec-forge-npu/P2] 1349 chars total in 18.7s
+  [Evaluator/exec-forge-t1] 204 chars (52.1s) -> ACCEPT
+  [Apply/exec-forge-t1] Spliced isolated function _query_kb into subtask_graph.py
+  [Cycle 10] ACCEPTED via exec-forge-t1 (primary, 5.3s)
+
+============================================================
+  SESSION COMPLETE: 4/10 accepted
 ============================================================

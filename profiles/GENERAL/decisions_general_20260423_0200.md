@@ -623,3 +623,416 @@ The change is a docstring expansion that clarifies the expected structure of the
 VERDICT: ACCEPT
 
 **Accepted:** YES
+
+## Cycle 5 -- 2026-04-23 07:30:02 UTC
+**Proposal:** Ensure that the `deps` dictionary contains only valid `SubtaskID` keys and dependency values to avoid potential runtime errors. This will improve the quality of cycle detection.
+
+```python
+def _has_dag_cycle(subtask_ids: list[SubtaskID], deps: dict[SubtaskID, list[SubtaskID]]) -> bool:
+    """Detect cycles in subtask dependency graph via DFS coloring.
+
+    Args:
+        subtask_ids (list[SubtaskID]): List of subtask IDs to check for cycles.
+        deps (dict[SubtaskID, list[SubtaskID]]): Mapping of subtask IDs to their dependencies.
+            The value for each key should be a list of subtask IDs that the key depends on.
+            For example: {SubtaskA: [SubtaskB, SubtaskC]} means A depends on B and C.
+
+    Returns:
+        bool: True if a cycle is detected, False otherwise.
+    """
+
+
+**Executor output:** 3160 chars
+
+**Evaluator:** [exec-forge-t1/primary] FAIL
+The proposed change introduces several critical logic errors and violates the constraints of the task.
+
+1. **Broken Cycle Detection Logic**: The line `if color[node] != WHITE: return True` is a fundamental error in DFS cycle detection. If a node is `BLACK` (already fully explored and safe), the function will incorrectly return `True`, reporting a cycle where none exists.
+2. **Logic Inversion**: In the recursive step `if _dfs(dep): return False`, the function returns `False` when a cycle is detected, which is the opposite of the required behavior.
+3. **Broken Variable Scopes**: The line `invalid_deps_set = set(value) - valid_subtasks` is located outside the loop where `value` is defined,
+
+**Accepted:** NO
+
+## Cycle 5 -- 2026-04-23 07:31:37 UTC
+**Proposal:** Ensure that the `deps` dictionary contains only valid `SubtaskID` keys and dependency values to avoid potential runtime errors. This will improve the quality of cycle detection.
+
+```python
+def _has_dag_cycle(subtask_ids: list[SubtaskID], deps: dict[SubtaskID, list[SubtaskID]]) -> bool:
+    """Detect cycles in subtask dependency graph via DFS coloring.
+
+    Args:
+        subtask_ids (list[SubtaskID]): List of subtask IDs to check for cycles.
+        deps (dict[SubtaskID, list[SubtaskID]]): Mapping of subtask IDs to their dependencies.
+            The value for each key should be a list of subtask IDs that the key depends on.
+            For example: {SubtaskA: [SubtaskB, SubtaskC]} means A depends on B and C.
+
+    Returns:
+        bool: True if a cycle is detected, False otherwise.
+    """
+
+
+**Executor output:** 3244 chars
+
+**Evaluator:** [exec-bifrost/primary] *   Objective: Improve `_has_dag_cycle` to ensure `deps` keys and values are valid `SubtaskID`s.
+    *   Constraints:
+        *   Only modify `_is_rfp_task` and `_build_rfp_dag` (Wait, the prompt says "only these two functions... `_is_rfp_task` and `_build_rfp_dag`", but the *context* says "only the function `_has_dag_cycle` is being modified". I will follow the context that `_has_dag_cycle` is the target).
+        *   Allowed changes: logging, guard clauses, improved error messages, type hints, expanded docstrings.
+        *   Prohibited: new imports, retry loops, async/await, signature changes, threading, timeouts, decorators, refactoring, control-flow restructuring, wrapping in try/except
+
+**Accepted:** NO
+
+## Cycle 5 -- 2026-04-23 07:33:11 UTC
+**Proposal:** Ensure that the `deps` dictionary contains only valid `SubtaskID` keys and dependency values to avoid potential runtime errors. This will improve the quality of cycle detection.
+
+```python
+def _has_dag_cycle(subtask_ids: list[SubtaskID], deps: dict[SubtaskID, list[SubtaskID]]) -> bool:
+    """Detect cycles in subtask dependency graph via DFS coloring.
+
+    Args:
+        subtask_ids (list[SubtaskID]): List of subtask IDs to check for cycles.
+        deps (dict[SubtaskID, list[SubtaskID]]): Mapping of subtask IDs to their dependencies.
+            The value for each key should be a list of subtask IDs that the key depends on.
+            For example: {SubtaskA: [SubtaskB, SubtaskC]} means A depends on B and C.
+
+    Returns:
+        bool: True if a cycle is detected, False otherwise.
+    """
+
+
+**Executor output:** 3446 chars
+
+**Evaluator:** [exec-hearth/primary] The user wants me to evaluate a code change to the function `_has_dag_cycle`.
+
+`_has_dag_cycle(subtask_ids: list[SubtaskID], deps: dict[SubtaskID, list[SubtaskID]]) -> bool`.
+
+    *   Adds type checks for keys and values in `deps`.
+    *   Checks if `key` is `SubtaskID`.
+    *   Checks if `value` is `list`.
+    *   Checks if `item` in `value` is `SubtaskID` and not `None`.
+    *   Returns `False` if invalid types are found.
+
+    *   `subtask_ids` is a `list[SubtaskID]`.
+    *   `deps` is a `dict[SubtaskID, list[SubtaskID]]`.
+    *   The code uses `isinstance(key, SubtaskID)`.
+
+    *   `SubtaskID` is used in type hints and in `isinstance`.
+    *   The instructions say: "assume all other symbo
+
+**Accepted:** NO
+
+## Cycle 5 -- 2026-04-23 07:33:11 UTC
+**Proposal:** Ensure that the `deps` dictionary contains only valid `SubtaskID` keys and dependency values to avoid potential runtime errors. This will improve the quality of cycle detection.
+
+```python
+def _has_dag_cycle(subtask_ids: list[SubtaskID], deps: dict[SubtaskID, list[SubtaskID]]) -> bool:
+    """Detect cycles in subtask dependency graph via DFS coloring.
+
+    Args:
+        subtask_ids (list[SubtaskID]): List of subtask IDs to check for cycles.
+        deps (dict[SubtaskID, list[SubtaskID]]): Mapping of subtask IDs to their dependencies.
+            The value for each key should be a list of subtask IDs that the key depends on.
+            For example: {SubtaskA: [SubtaskB, SubtaskC]} means A depends on B and C.
+
+    Returns:
+        bool: True if a cycle is detected, False otherwise.
+    """
+
+
+**Executor output:** 0 chars
+
+**Evaluator:** All parallel candidates rejected: exec-forge-t1:reject, exec-bifrost:reject, exec-hearth:reject, exec-forge-npu:syntax
+
+**Accepted:** NO
+
+## Cycle 6 -- 2026-04-23 07:35:43 UTC
+**Proposal:** To improve error message clarity in `_run_subtask_with_semaphore`, add a log message when the subtask result status is set to `"FAILED_NEEDS_HUMAN"`. This will help in debugging issues related to subtask failures. The improved code snippet:
+
+```python
+def _run_subtask_with_semaphore(spec: SubtaskSpec) -> "SubtaskResult":
+    if spec is None:
+        log.error("Subtask specification is None -- cannot proceed.")
+        from bifrost_message import SubtaskResult, compute_checksum
+        result =  SubtaskResult(
+            type="subtask_result",
+            subtask_id="",
+            graph_id="",
+            status="FAILED_NEEDS_HUMAN",
+            output="",
+            output_checksum=compute_checksum(""),
+            verification_level_reached=0,
+            tier_used="",
+            toke
+
+**Executor output:** 3419 chars
+
+**Evaluator:** [exec-forge-t1/primary] FAIL
+The change violates the explicit prohibition against wrapping existing code in `try/except` blocks that did not previously exist. Furthermore, it introduces a critical logic error: if `run_subtask(spec)` raises an exception, the `result` variable is never assigned, causing the `except` block to raise an `UnboundLocalError` when it attempts to access `result.output`.
+
+VERDICT: REJECT
+REASON: Introduces prohibited try/except block and causes UnboundLocalError in the exception handler.
+
+**Accepted:** NO
+
+## Cycle 6 -- 2026-04-23 07:37:16 UTC
+**Proposal:** To improve error message clarity in `_run_subtask_with_semaphore`, add a log message when the subtask result status is set to `"FAILED_NEEDS_HUMAN"`. This will help in debugging issues related to subtask failures. The improved code snippet:
+
+```python
+def _run_subtask_with_semaphore(spec: SubtaskSpec) -> "SubtaskResult":
+    if spec is None:
+        log.error("Subtask specification is None -- cannot proceed.")
+        from bifrost_message import SubtaskResult, compute_checksum
+        result =  SubtaskResult(
+            type="subtask_result",
+            subtask_id="",
+            graph_id="",
+            status="FAILED_NEEDS_HUMAN",
+            output="",
+            output_checksum=compute_checksum(""),
+            verification_level_reached=0,
+            tier_used="",
+            toke
+
+**Executor output:** 2474 chars
+
+**Evaluator:** [exec-bifrost/primary] *   Objective: Improve RFP output quality by modifying `_run_subtask_with_semaphore`.
+    *   Constraints:
+        1.  Only modify `_run_subtask_with_semaphore`.
+        2.  Allowed changes: add logging, add guard clauses, improve error messages, add type hints, add/expand docstrings.
+        3.  Prohibited: new imports, retry loops, async/await changes, function-signature changes, threading, timeouts, decorators, refactoring, control-flow restructuring, wrapping in try/except.
+    *   Task: Add logging when `result.status == "FAILED_NEEDS_HUMAN"`.
+
+    *   Function: `_run_subtask_with_semaphore`.
+    *   The proposed change modifies the `if spec is None` block to assign the result to a vari
+
+**Accepted:** NO
+
+## Cycle 6 -- 2026-04-23 07:38:35 UTC
+**Proposal:** To improve error message clarity in `_run_subtask_with_semaphore`, add a log message when the subtask result status is set to `"FAILED_NEEDS_HUMAN"`. This will help in debugging issues related to subtask failures. The improved code snippet:
+
+```python
+def _run_subtask_with_semaphore(spec: SubtaskSpec) -> "SubtaskResult":
+    if spec is None:
+        log.error("Subtask specification is None -- cannot proceed.")
+        from bifrost_message import SubtaskResult, compute_checksum
+        result =  SubtaskResult(
+            type="subtask_result",
+            subtask_id="",
+            graph_id="",
+            status="FAILED_NEEDS_HUMAN",
+            output="",
+            output_checksum=compute_checksum(""),
+            verification_level_reached=0,
+            tier_used="",
+            toke
+
+**Executor output:** 2416 chars
+
+**Evaluator:** [exec-hearth/primary] PASS
+The change adds logging statements to improve debuggability when a subtask specification is missing or when cloud tier constraints are checked. It adheres to the allowed change types (adding logging) and does not introduce any breaking changes, new imports, or prohibited control-flow restructuring.
+
+VERDICT: ACCEPT
+
+**Accepted:** YES
+
+## Cycle 7 -- 2026-04-23 07:41:44 UTC
+**Proposal:** Add a guard clause to ensure `state` has an 'id' key to improve error handling. This will ensure that the function does not attempt to access a missing key, which could lead to unexpected behavior or crashes.
+
+```python
+def failed_graph_node(state: AutopilotState) -> dict:
+    """Log a warning and return a failed status requiring human review when a graph node fails.
+
+    Args:
+        state (AutopilotState): The current state of the autopilot, containing node information.
+            The state should have an 'id' key to identify the node.
+
+    Returns:
+        dict: A dictionary with the status and human review requirement.
+    """
+    if 'id' not in state:
+        log.error("State is missing 'id' key. Human review required.")
+        return {"status": "FAILED_NEEDS_HUMAN", "human_review_
+
+**Executor output:** 761 chars
+
+**Evaluator:** [exec-forge-t1/primary] PASS
+The change introduces a guard clause that checks for the existence of the 'id' key in the `state` object before attempting to log its value. This prevents the warning log from displaying `None` if the key is missing and provides a more specific error log. The return value remains consistent with the original function's purpose.
+
+VERDICT: ACCEPT
+
+**Accepted:** YES
+
+## Cycle 8 -- 2026-04-23 07:46:12 UTC
+**Proposal:** Add a guard clause to handle missing keys in the `l6` dictionary. This will improve error message clarity and prevent potential crashes when required keys are missing.
+
+```python
+def _needs_review(assembled: str, l6: dict) -> tuple[bool, str]:
+    """Determine if a review is needed for the assembled string based on L6 result and whether any stub patterns are detected.
+
+    This function returns a tuple containing two elements:
+        - `should_review` (boolean): True if a review is required. False otherwise.
+        - `reason` (string): A brief explanation of why a review may be needed, if applicable. An empty string denotes no need for a review.
+
+    Args:
+        assembled (str): The assembled string to be checked for review needs.
+        l6 (dict): The L6 result dictionary containing 
+
+**Executor output:** 1648 chars
+
+**Evaluator:** [exec-forge-t1/primary] PASS
+The change correctly introduces a guard clause to prevent `KeyError` when accessing `'passed'` or `'summary'` keys in the `l6` dictionary. It also adds an appropriate error log and returns a descriptive reason, which improves the robustness of the function and follows the allowed change types (guard clause, logging, improved error handling).
+
+VERDICT: ACCEPT
+
+**Accepted:** YES
+
+## Cycle 9 -- 2026-04-23 07:50:03 UTC
+**Proposal:** Add type hint to the return value and improve error message. This helps users understand what went wrong without needing to debug.
+
+```python
+def assemble_node(state: AutopilotState) -> dict:
+    """
+    Assembles a node in the LangGraph using the provided state.
+
+    Args:
+        state (AutopilotState): The state containing information needed to assemble the node.
+
+    Returns:
+        dict: The result of assembling the node.
+    """
+    log.info("Starting to assemble node with state: %s", state)
+    try:
+        return _run_async(_assemble_async(state))
+    except Exception as e:
+        log.error("Failed to assemble node with state: %s. Error: %s", state, e)
+        raise
+```
+
+**Executor output:** 1319 chars
+
+**Evaluator:** [exec-forge-t1/primary] FAIL
+The proposed change violates the explicit prohibition against wrapping existing code in a `try/except` block that did not previously exist. Additionally, it introduces control-flow restructuring and changes the error propagation behavior by suppressing the original traceback with `from None`.
+
+VERDICT: REJECT
+REASON: Introduces a prohibited try/except block and modifies control flow.
+
+**Accepted:** NO
+
+## Cycle 9 -- 2026-04-23 07:50:34 UTC
+**Proposal:** Add type hint to the return value and improve error message. This helps users understand what went wrong without needing to debug.
+
+```python
+def assemble_node(state: AutopilotState) -> dict:
+    """
+    Assembles a node in the LangGraph using the provided state.
+
+    Args:
+        state (AutopilotState): The state containing information needed to assemble the node.
+
+    Returns:
+        dict: The result of assembling the node.
+    """
+    log.info("Starting to assemble node with state: %s", state)
+    try:
+        return _run_async(_assemble_async(state))
+    except Exception as e:
+        log.error("Failed to assemble node with state: %s. Error: %s", state, e)
+        raise
+```
+
+**Executor output:** 682 chars
+
+**Evaluator:** [exec-hearth/primary] FAIL
+The change violates several core constraints:
+1. **Scope Violation**: The objective explicitly limits modifications to `_is_rfp_task` and `_build_rfp_dag`. This change modifies `assemble_node`.
+2. **Prohibited Change Type**: The instructions explicitly prohibit "wrapping existing code in try/except that did not previously have one."
+3. **Breaking Change**: The change wraps the original exception in a `RuntimeError`. This alters the exception type raised by the function, which can break error-handling logic in calling functions that expect the original exception type.
+4. **Inaccurate Description**: The description claims to "add type hint to the return value," but the original function a
+
+**Accepted:** NO
+
+## Cycle 9 -- 2026-04-23 07:50:34 UTC
+**Proposal:** Add type hint to the return value and improve error message. This helps users understand what went wrong without needing to debug.
+
+```python
+def assemble_node(state: AutopilotState) -> dict:
+    """
+    Assembles a node in the LangGraph using the provided state.
+
+    Args:
+        state (AutopilotState): The state containing information needed to assemble the node.
+
+    Returns:
+        dict: The result of assembling the node.
+    """
+    log.info("Starting to assemble node with state: %s", state)
+    try:
+        return _run_async(_assemble_async(state))
+    except Exception as e:
+        log.error("Failed to assemble node with state: %s. Error: %s", state, e)
+        raise
+```
+
+**Executor output:** 0 chars
+
+**Evaluator:** All parallel candidates rejected: exec-forge-t1:reject, exec-hearth:reject, exec-bifrost:syntax, exec-forge-npu:renamed(_assemble_async)
+
+**Accepted:** NO
+
+## Cycle 10 -- 2026-04-23 07:54:31 UTC
+**Proposal:** Add a log statement before returning the result to capture the status of the decomposition process. This will help in debugging and understanding the flow when the function completes successfully. This will help to improve RFP output quality by providing more context.
+
+```python
+def decompose_node(state: AutopilotState) -> dict:
+    """Decompose with REPLAN: retry once if decomposer returns empty/bad DAG.
+
+    N<=3 Decomposition Gate (P2b): if decomposer returns <=3 subtasks AND all
+    are TRIVIAL/MODERATE band, skip fan_out+assembly overhead (~90s fixed cost)
+    and route direct to T1B instead. Fan-out only wins at N>=4 or COMPLEX/FRONTIER.
+    """
+    if not state:
+        log.error("Invalid state provided to decompose_node")
+        return {"status": "FAILED", "error": "Invalid state"
+
+**Executor output:** 2708 chars
+
+**Evaluator:** [exec-bifrost/primary] The user wants me to evaluate a code change to the `decompose_node` function in `autopilot_graph.py`.
+
+`decompose_node` function.
+
+    *   Add a log statement before returning the result to capture the status of the decomposition process.
+
+    *   `log.debug("Starting decompose process...")` added before `result = _run_async(...)`.
+    *   `log.debug(f"Decomposition process completed with status: {result['status']}")` added after subtasks check and before the N<=3 gate logic.
+
+    *   `log.debug("Starting decompose process...")`: Safe.
+    *   `log.debug(f"Decomposition process completed with status: {result['status']}")`:
+        *   `result` is defined via `_run_async(_decompose_async(stat
+
+**Accepted:** NO
+
+## Cycle 10 -- 2026-04-23 07:55:58 UTC
+**Proposal:** Add a log statement before returning the result to capture the status of the decomposition process. This will help in debugging and understanding the flow when the function completes successfully. This will help to improve RFP output quality by providing more context.
+
+```python
+def decompose_node(state: AutopilotState) -> dict:
+    """Decompose with REPLAN: retry once if decomposer returns empty/bad DAG.
+
+    N<=3 Decomposition Gate (P2b): if decomposer returns <=3 subtasks AND all
+    are TRIVIAL/MODERATE band, skip fan_out+assembly overhead (~90s fixed cost)
+    and route direct to T1B instead. Fan-out only wins at N>=4 or COMPLEX/FRONTIER.
+    """
+    if not state:
+        log.error("Invalid state provided to decompose_node")
+        return {"status": "FAILED", "error": "Invalid state"
+
+**Executor output:** 2691 chars
+
+**Evaluator:** [exec-hearth/primary] PASS
+The change is correct and safe. It adds logging statements to the `decompose_node` function to improve observability of the decomposition and replanning process, without altering the underlying logic, function signatures, or control flow.
+
+VERDICT: ACCEPT
+
+**Accepted:** YES
+
+## Run Summary -- 2026-04-23 07:57 UTC
+Accepted: 7/10 | Models: mistral-small3.1:24b -> mistral:7b-instruct-v0.3 -> bifrost-t2-gemma4

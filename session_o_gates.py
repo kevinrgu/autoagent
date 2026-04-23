@@ -44,7 +44,8 @@ def gate_1_import_canary() -> tuple[bool, str]:
     script = f"import sys; sys.path.insert(0, r'{ROUTER_DIR}'); import {module_list}; print('IMPORT_OK')"
     code, out, err = _run([sys.executable, "-c", script], timeout=30)
     if code != 0 or "IMPORT_OK" not in out:
-        return False, f"import_canary: code={code} err={err.strip()[:200]}"
+        err_msg = (err.strip().splitlines() or [""])[-1][:300]
+        return False, f"import_canary: code={code} err={err_msg}"
     return True, "import_canary: OK"
 
 
@@ -155,7 +156,8 @@ print('GRAPH_OK')
 """
     code, out, err = _run([sys.executable, "-c", script], timeout=30)
     if code != 0 or "GRAPH_OK" not in out:
-        return False, f"graph_invoke: code={code} err={err.strip()[:200]}"
+        err_msg = (err.strip().splitlines() or [""])[-1][:300]
+        return False, f"graph_invoke: code={code} err={err_msg}"
     return True, "graph_invoke: OK"
 
 

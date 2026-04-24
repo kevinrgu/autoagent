@@ -1,0 +1,144 @@
+BIFROST Session O -- Local 3-Agent Cycle
+  Profile:   /general
+  Proposer:  mistral-small3.1:24b
+  Executor:  mistral:7b-instruct-v0.3
+  Evaluator: bifrost-t2-gemma4
+  Objective: Improve RFP output quality by modifying ONLY these two functions in autopilot_graph.py: `_is_rfp_task` and `_build_rfp_d
+  Target:    D:\Projects\bifrost-router\autopilot_graph.py
+  Decisions: C:\Users\jhpri\projects\autoagent\profiles\GENERAL\decisions_general_20260424_0200.md
+  Cycles:    10
+  num_ctx:   32768
+  [Backup] autopilot_graph.py -> autopilot_graph.py.bak
+
+  [Warmup] Pre-loading models with keep_alive=15m ...
+  [Warmup] Proposer (mistral-small3.1:24b): 200 (32s)
+  [Warmup] Executor (mistral:7b-instruct-v0.3): 200 (8s)
+  [Warmup] Evaluator (bifrost-t2-gemma4): 200 (1s)
+
+============================================================
+  CYCLE 1
+============================================================
+  [TargetFn] failed_graph_node (15 lines, line 1693-1707)
+
+  [Proposer] mistral-small3.1:24b @ Bifrost ...
+  [Proposer] 1048 chars (75s)
+  Preview: Ensure clarity on the missing 'id' key in the log message. This change improves the traceability of why a node might fail due to missing identifiers. Log the state as a string to avoid excessive verbosity, but keep enough context for easy debugging.
+
+```python
+def failed_graph_node(state: AutopilotS...
+  [Executor] parallel fan-out across 4 nodes
+  [Executor/exec-forge-t1] 958 chars in 4.6s
+  [Executor/exec-forge-npu/P1] 783 chars in 5.2s
+  [Executor/exec-hearth] 898 chars in 7.2s
+  [Executor/exec-bifrost] 823 chars in 168.0s
+  [Executor/exec-forge-npu/P2] 1156 chars total in 171.6s
+  [Evaluator/exec-forge-t1] 348 chars (139.8s) -> ACCEPT
+  [Apply/exec-forge-t1] Spliced isolated function failed_graph_node into autopilot_graph.py
+  [Cycle 1] ACCEPTED via exec-forge-t1 (primary, 4.6s)
+
+============================================================
+  CYCLE 2
+============================================================
+  [TargetFn] _needs_review (37 lines, line 978-1014)
+
+  [Proposer] mistral-small3.1:24b @ Bifrost ...
+  [Proposer] FAIL (26s): Server error '500 Internal Server Error' for url 'http://192.168.2.33:11434/v1/chat/completions'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/500
+  [Proposer] Empty/short, retrying simpler prompt...
+  [Proposer] Retry OK: 506 chars (61s)
+  Preview: To improve error handling and make the function more resilient, consider adding a default value for `_STUB_PATTERNS` to prevent potential `NameError` if `_STUB_PATTERNS` is not defined:
+
+```python
+def _needs_review(assembled: str, l6: dict) -> tuple[bool, str]:
+    # Ensure _STUB_PATTERNS is defined...
+  [Executor] parallel fan-out across 4 nodes
+  [Executor/exec-forge-t1] 1731 chars in 8.5s
+  [Executor/exec-hearth] 877 chars in 8.7s
+  [Executor/exec-forge-npu/P1] 1644 chars in 9.9s
+  [Executor/exec-bifrost] 877 chars in 13.5s
+  [Executor/exec-forge-npu/P2] 1221 chars total in 17.2s
+  [Evaluator/exec-forge-t1] 435 chars (40.2s) -> REJECT
+  [Evaluator/exec-hearth] 485 chars (33.2s) -> REJECT
+  [Evaluator/exec-bifrost] 433 chars (33.0s) -> REJECT
+  [Executor/exec-forge-npu/two_pass] Syntax FAIL: File "C:\Users\jhpri\AppData\Local\Temp\tmp9xh32utz.py", line 1004
+    ```
+    ^
+  [Executor/exec-forge-npu/two_pass] syntax-fail sample: 'def _needs_review(assembled: str, l6: dict) -> tuple[bool, str]:\\n    import logging\\n\\n    should_review = False\\n    reason = ""\\n\\n    if not assembled:\\n        logging.debug("Empty assembled string prov'
+  [Cycle 2] all 4 candidates rejected
+
+============================================================
+  CYCLE 3
+============================================================
+  [TargetFn] _run_subtask_with_semaphore (51 lines, line 131-181)
+
+  [Proposer] mistral-small3.1:24b @ Bifrost ...
+  [Proposer] 654 chars (68s)
+  Preview: Add error logging for missing semaphore acquisition to `_run_subtask_with_semaphore`. This will allow better diagnostics when semaphores are incorrectly configured.
+```python
+    # ...existing code...
+    if spec.assigned_tier not in _TIER_SEMAPHORES:
+        log.warning(f"Tier '{spec.assigned_tier}...
+  [Executor] parallel fan-out across 4 nodes
+  [Executor/exec-forge-t1] 2722 chars in 12.7s
+  [Executor/exec-forge-npu/P1] 2416 chars in 13.5s
+  [Executor/exec-bifrost] 2636 chars in 21.0s
+  [Executor/exec-hearth] 2592 chars in 21.1s
+  [Executor/exec-forge-npu/P2] 2350 chars total in 29.1s
+  [Evaluator/exec-forge-t1] 1292 chars (42.2s) -> REJECT
+  [Executor/exec-bifrost/primary] Syntax FAIL: File "C:\Users\jhpri\AppData\Local\Temp\tmpgbrn_hye.py", line 152
+    if spec.as
+  [Executor/exec-bifrost/primary] syntax-fail sample: 'def _run_subtask_with_semaphore(spec: SubtaskSpec) -> "SubtaskResult":\\n    if spec is None:\\n        log.error("Subtask specification is None -- cannot proceed.")\\n        from bifrost_message import Su'
+  [call_llm] empty content (finish=length) -> reasoning fallback (13972 chars)
+  [Evaluator/exec-hearth] 13972 chars (95.5s) -> REJECT
+  [Executor/exec-forge-npu/two_pass] Syntax FAIL: File "C:\Users\jhpri\AppData\Local\Temp\tmpf291v2yr.py", line 179
+    ```
+    ^
+
+  [Executor/exec-forge-npu/two_pass] syntax-fail sample: 'def _run_subtask_with_semaphore(spec: SubtaskSpec) -> SubtaskResult:\\n    if spec is None:\\n        log.error("Subtask specification is None -- cannot proceed.")\\n        from bifrost_message import Subt'
+  [Cycle 3] all 4 candidates rejected
+
+============================================================
+  CYCLE 4
+============================================================
+  [TargetFn] _run_async (29 lines, line 38-66)
+
+  [Proposer] mistral-small3.1:24b @ Bifrost ...
+  [Proposer] 1570 chars (73s)
+  Preview: Add a logging statement to track the result of the coroutine execution. This will enhance traceability and debugging capabilities.
+
+```python
+def _run_async(coro):
+    """Run an async coroutine from a sync node, even inside a FastAPI event loop.
+
+    If called from a synchronous context (no active e...
+  [Executor] parallel fan-out across 4 nodes
+  [Executor/exec-forge-t1] 1439 chars in 6.6s
+  [Executor/exec-forge-npu/P1] 1390 chars in 7.7s
+  [Executor/exec-hearth] 1422 chars in 11.1s
+  [Executor/exec-bifrost] 1634 chars in 17.0s
+  [Executor/exec-forge-npu/P2] 1154 chars total in 20.5s
+  [Evaluator/exec-forge-t1] 332 chars (38.9s) -> ACCEPT
+  [Apply/exec-forge-t1] Spliced isolated function _run_async into autopilot_graph.py
+  [Cycle 4] ACCEPTED via exec-forge-t1 (primary, 6.6s)
+
+============================================================
+  CYCLE 5
+============================================================
+  [TargetFn] decompose_node (62 lines, line 358-419)
+
+  [Proposer] mistral-small3.1:24b @ Bifrost ...
+  [Proposer] FAIL (19s): Server error '500 Internal Server Error' for url 'http://192.168.2.33:11434/v1/chat/completions'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/500
+  [Proposer] Empty/short, retrying simpler prompt...
+  [Proposer] Retry OK: 359 chars (53s)
+  Preview: Improve the function by adding a type hint for the return value (`dict`) to the function signature:
+
+```python
+def decompose_node(state: AutopilotState) -> dict[str, Any]:
+```
+
+This makes the function signature more informative and helps with static type checking. This change assumes you have `from ...
+  [Executor] parallel fan-out across 4 nodes
+  [Executor/exec-hearth] 434 chars in 7.8s
+  [Executor/exec-bifrost] 435 chars in 11.9s
+  [Executor/exec-forge-t1] 25

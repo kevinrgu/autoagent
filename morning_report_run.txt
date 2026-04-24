@@ -1,8 +1,8 @@
-morning_report.py — 2026-04-22 06:00:01
+morning_report.py — 2026-04-23 06:00:01
   Wrote C:\Users\jhpri\projects\autoagent\MORNING_REPORT.md
 
   Status: READY
-  Total cycles: 709  accepted: 174  rejected: 535  rate: 24.5%
+  Total cycles: 828  accepted: 199  rejected: 629  rate: 24.0%
   OK — OK: autopilot_graph.py
   OK — OK: subtask_graph.py
 
@@ -23,6 +23,7 @@ morning_report.py — 2026-04-22 06:00:01
   [OK] profiles/CODING/decisions_coding_20260418_0200.md
   [OK] profiles/CODING/decisions_coding_20260421_0200.md
   [OK] profiles/CODING/decisions_coding_20260422_0200.md
+  [OK] profiles/CODING/decisions_coding_20260423_0200.md
   [OK] profiles/CODING/decisions_coding_3m_mistral.md
   [OK] profiles/CODING/decisions_coding_3machine.md
   [OK] profiles/CODING/decisions_coding_final.md
@@ -38,6 +39,7 @@ morning_report.py — 2026-04-22 06:00:01
   [OK] profiles/GENERAL/decisions_general_20260418_0200.md
   [OK] profiles/GENERAL/decisions_general_20260421_0200.md
   [OK] profiles/GENERAL/decisions_general_20260422_0200.md
+  [OK] profiles/GENERAL/decisions_general_20260423_0200.md
   [OK] profiles/GENERAL/decisions_general_final.md
   [OK] profiles/GENERAL/decisions_general_training.md
   [OK] profiles/RESEARCH/decisions_research.md
@@ -47,9 +49,10 @@ morning_report.py — 2026-04-22 06:00:01
   [OK] profiles/RESEARCH/decisions_research_20260418_0200.md
   [OK] profiles/RESEARCH/decisions_research_20260421_0200.md
   [OK] profiles/RESEARCH/decisions_research_20260422_0200.md
+  [OK] profiles/RESEARCH/decisions_research_20260423_0200.md
 
 [3] autoagent root files
-  [--] C:\Users\jhpri\projects\autoagent\active_profile.txt (not found)
+  [OK] active_profile.txt
   [OK] profiles.json
   [OK] architect.py
 
@@ -60,4 +63,4 @@ morning_report.py — 2026-04-22 06:00:01
 
 [manifest] L:\temp\pk-upload\pk_sync_manifest.txt
 
-Done: 40 copied, 1 skipped.
+Done: 44 copied, 0 skipped.

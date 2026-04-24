@@ -207,6 +207,7 @@ def run_profile(profile: str, cycles: int, timeout: int,
         sys.executable, "-u", str(CYCLE_SCRIPT),
         "--profile", profile,
         "--max-cycles", str(cycles),
+        "--suggest-only",
     ]
     if decisions_path:
         cmd.extend(["--decisions", decisions_path])

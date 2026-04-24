@@ -12,6 +12,7 @@ No max_tokens -- let models respond at full length.
 
 import argparse
 import ast
+import difflib
 import hashlib
 import json
 import os
@@ -735,7 +736,7 @@ def execute_parallel(
 
 
 def run_cycle(cycle_num: int, objective: str, target_path: str,
-              decisions_path: str) -> bool:
+              decisions_path: str, suggest_only: bool = False) -> bool:
     target_code = read_file(target_path)
     if not target_code:
         print(f"  WARNING: target file empty: {target_path}")
@@ -977,6 +978,25 @@ def run_cycle(cycle_num: int, objective: str, target_path: str,
                     print(f"  [GATES/{label}] FAIL - restored {Path(target_path).name}")
                     rejection_reasons.append(f"{label}:gates({gate_summary[:60]})")
                     continue
+                if suggest_only:
+                    proposed_content = read_file(target_path)
+                    with open(target_path, "w", encoding="utf-8") as _f:
+                        _f.write(target_code)
+                    diff_text = "\n".join(difflib.unified_diff(
+                        target_code.splitlines(),
+                        proposed_content.splitlines(),
+                        fromfile=f"a/{Path(target_path).name}",
+                        tofile=f"b/{Path(target_path).name}",
+                        lineterm="",
+                    ))
+                    log_decision(
+                        decisions_path, cycle_num, proposal[:800],
+                        f"SUGGESTED via {label} ({trust}) [suggest-only mode]:\n```diff\n{diff_text[:6000]}\n```",
+                        True, len(proposed_content),
+                    )
+                    print(f"  [SUGGEST-ONLY/{label}] target restored; diff logged "
+                          f"({len(diff_text)} chars)")
+                    return True
                 print(f"  [Cycle {cycle_num}] ACCEPTED via {label} "
                       f"({trust}, {elapsed:.1f}s)")
                 return True
@@ -1327,6 +1347,26 @@ def run_cycle(cycle_num: int, objective: str, target_path: str,
                     continue
                 print("  [GATES] all passed")
 
+                if suggest_only:
+                    proposed_content = read_file(target_path)
+                    with open(target_path, "w", encoding="utf-8") as _f:
+                        _f.write(target_code)
+                    diff_text = "\n".join(difflib.unified_diff(
+                        target_code.splitlines(),
+                        proposed_content.splitlines(),
+                        fromfile=f"a/{Path(target_path).name}",
+                        tofile=f"b/{Path(target_path).name}",
+                        lineterm="",
+                    ))
+                    log_decision(
+                        decisions_path, cycle_num, proposal[:800],
+                        f"SUGGESTED [suggest-only mode]:\n```diff\n{diff_text[:6000]}\n```",
+                        True, len(proposed_content),
+                    )
+                    print(f"  [SUGGEST-ONLY] target restored; diff logged "
+                          f"({len(diff_text)} chars)")
+                    return True
+
                 return True
             except Exception as e:
                 print(f"  [Apply] FAIL: {str(e)}")
@@ -1389,6 +1429,8 @@ def main():
     parser.add_argument("--program", default="program.md")
     parser.add_argument("--decisions", default="decisions.md")
     parser.add_argument("--max-cycles", type=int, default=5)
+    parser.add_argument("--suggest-only", action="store_true", default=False,
+                        help="Log accepted suggestions to decisions.md but do NOT write to target file")
     parser.add_argument("--profile", choices=["coding", "general", "research"],
                         default=None, help="Named profile to load from profiles.json")
     args = parser.parse_args()
@@ -1450,7 +1492,8 @@ def main():
     accepted_count = 0
     for cycle in range(1, args.max_cycles + 1):
         try:
-            ok = run_cycle(cycle, objective, target, decisions_path)
+            ok = run_cycle(cycle, objective, target, decisions_path,
+                           suggest_only=args.suggest_only)
             if ok:
                 accepted_count += 1
         except Exception as e:

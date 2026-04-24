@@ -141,4 +141,143 @@ This makes the function signature more informative and helps with static type ch
   [Executor] parallel fan-out across 4 nodes
   [Executor/exec-hearth] 434 chars in 7.8s
   [Executor/exec-bifrost] 435 chars in 11.9s
-  [Executor/exec-forge-t1] 25
+  [Executor/exec-forge-t1] 2517 chars in 17.2s
+  [Executor/exec-forge-npu/P1] 2703 chars in 17.8s
+  [Executor/exec-forge-npu/P2] 2477 chars total in 26.4s
+  [Evaluator/exec-hearth] 417 chars (54.4s) -> REJECT
+  [Evaluator/exec-bifrost] 491 chars (42.5s) -> REJECT
+  [Evaluator/exec-forge-t1] 424 chars (29.5s) -> REJECT
+  [Executor/exec-forge-npu/two_pass] Syntax FAIL: File "C:\Users\jhpri\AppData\Local\Temp\tmp6wmkymgj.py", line 412
+    ```
+    ^
+
+  [Executor/exec-forge-npu/two_pass] syntax-fail sample: 'def decompose_node(state: AutopilotState) -> dict[str, Any]:\\n    if not state:\\n        logger.error("Invalid state provided to decompose_node")\\n        return {"status": "FAILED", "error": "Invalid st'
+  [Cycle 5] all 4 candidates rejected
+
+============================================================
+  CYCLE 6
+============================================================
+  [TargetFn] _run_rfp_coherence (78 lines, line 1209-1286)
+
+  [Proposer] mistral-small3.1:24b @ Bifrost ...
+  [Proposer] 3417 chars (193s)
+  Preview: Change the docstring to include type hints for the parameters and return type. This will improve clarity and make the function's purpose and usage more apparent. Additionally, improve error message to include the `spec` and `graph_id` where relevant.
+
+```python
+def _run_rfp_coherence(spec: "SubtaskS...
+  [Executor] parallel fan-out across 4 nodes
+  [Executor/exec-forge-npu/P1] 2879 chars in 15.5s
+  [Executor/exec-forge-t1] 3516 chars in 16.5s
+  [Executor/exec-hearth] 3396 chars in 26.5s
+  [Executor/exec-bifrost] 3195 chars in 29.5s
+  [Executor/exec-forge-npu/P2] 2688 chars total in 38.1s
+  [call_llm] empty content (finish=length) -> reasoning fallback (14970 chars)
+  [Evaluator/exec-forge-t1] 14970 chars (117.1s) -> REJECT
+  [Executor/exec-hearth/primary] Syntax FAIL: File "C:\Users\jhpri\AppData\Local\Temp\tmp3mi4y84l.py", line 1209
+    def _run_
+  [Executor/exec-hearth/primary] syntax-fail sample: 'def _run_rfp_coherence(spec: "SubtaskSpec", assembled_sections: str = None, graph_id: str) -> "SubtaskResult":\\n    """Assemble RFP sections with consistent headers -- programmatic, no LLM call.\\n\\n    T'
+  [Evaluator/exec-bifrost] 519 chars (56.9s) -> REJECT
+  [Evaluator/exec-forge-npu] 789 chars (41.9s) -> REJECT
+  [Cycle 6] all 4 candidates rejected
+
+============================================================
+  CYCLE 7
+============================================================
+  [TargetFn] _is_rfp_task (11 lines, line 1082-1092)
+
+  [Proposer] mistral-small3.1:24b @ Bifrost ...
+  [Proposer] 865 chars (74s)
+  Preview: Add debug logging for when the prompt does not contain any RFP signals.
+Why: This helps trace why a prompt was not identified as an RFP task, which can improve debugging and RFP output quality.
+
+```python
+def _is_rfp_task(prompt: str) -> bool:
+    """Return True if the prompt is an RFP/proposal writ...
+  [Executor] parallel fan-out across 4 nodes
+  [Executor/exec-forge-t1] 656 chars in 5.3s
+  [Executor/exec-forge-npu/P1] 656 chars in 5.4s
+  [Executor/exec-hearth] 675 chars in 5.9s
+  [Executor/exec-bifrost] 682 chars in 11.5s
+  [Executor/exec-forge-npu/P2] 981 chars total in 14.7s
+  [Evaluator/exec-forge-t1] 368 chars (42.8s) -> ACCEPT
+  [Apply/exec-forge-t1] Spliced isolated function _is_rfp_task into autopilot_graph.py
+  [Cycle 7] ACCEPTED via exec-forge-t1 (primary, 5.3s)
+
+============================================================
+  CYCLE 8
+============================================================
+  [TargetFn] _run_async (29 lines, line 38-66)
+
+  [Proposer] mistral-small3.1:24b @ Bifrost ...
+  [Proposer] 1767 chars (98s)
+  Preview: Improve error handling by adding a log message for unexpected exceptions to ensure issues are surfaced.  Improving error messages can help improve the quality of RFP responses by providing more informative debug logs.
+
+```python
+def _run_async(coro):
+    """Run an async coroutine from a sync node, e...
+  [Executor] parallel fan-out across 4 nodes
+  [Executor/exec-forge-t1] 1661 chars in 7.3s
+  [Executor/exec-forge-npu/P1] 1506 chars in 8.4s
+  [Executor/exec-hearth] 1688 chars in 12.6s
+  [Executor/exec-bifrost] 1635 chars in 49.3s
+  [Executor/exec-forge-npu/P2] 880 chars total in 52.2s
+  [Evaluator/exec-forge-t1] 1128 chars (92.6s) -> REJECT
+  [call_llm] empty content (finish=length) -> reasoning fallback (15920 chars)
+  [Evaluator/exec-hearth] 15920 chars (128.1s) -> REJECT
+  [Executor/exec-bifrost/primary] Syntax FAIL: File "C:\Users\jhpri\AppData\Local\Temp\tmpdxeb0lc4.py", line 75
+    try:
+Syntax
+  [Executor/exec-bifrost/primary] syntax-fail sample: 'def _run_async(coro):\\n    """Run an async coroutine from a sync node, even inside a FastAPI event loop.\\n\\n    If called from a synchronous context (no active event loop), it runs the\\n    coroutine dire'
+  [Evaluator/exec-forge-npu] 1174 chars (65.2s) -> REJECT
+  [Cycle 8] all 4 candidates rejected
+
+============================================================
+  CYCLE 9
+============================================================
+  [TargetFn] _extract_code (13 lines, line 1499-1511)
+
+  [Proposer] mistral-small3.1:24b @ Bifrost ...
+  [Proposer] 947 chars (74s)
+  Preview: Add a type hint to the return type to clarify that the function returns a string. Improves the clarity of the function's purpose and expected output.  The improvement is safe because it does not change the function's behavior.
+```python
+def _extract_code(text: str) -> str:
+    """Extract fenced code...
+  [Executor] parallel fan-out across 4 nodes
+  [Executor/exec-forge-t1] 706 chars in 6.0s
+  [Executor/exec-forge-npu/P1] 706 chars in 6.1s
+  [Executor/exec-hearth] 724 chars in 6.7s
+  [Executor/exec-bifrost] 724 chars in 12.8s
+  [Executor/exec-forge-npu/P2] 839 chars total in 15.6s
+  [Evaluator/exec-forge-t1] 273 chars (110.7s) -> REJECT
+  [Evaluator/exec-hearth] 400 chars (24.2s) -> ACCEPT
+  [Apply/exec-hearth] Spliced isolated function _extract_code into autopilot_graph.py
+  [Cycle 9] ACCEPTED via exec-hearth (primary, 6.7s)
+
+============================================================
+  CYCLE 10
+============================================================
+  [TargetFn] route_after_gate (25 lines, line 1632-1656)
+
+  [Proposer] mistral-small3.1:24b @ Bifrost ...
+  [Proposer] 1439 chars (92s)
+  Preview: Add logging to check when state is not in DIRECT_ROUTE.
+
+This improves traceability and debugging — log the status if it is not "DIRECT_ROUTE" — helps in identifying unexpected states.
+
+```python
+def route_after_gate(state: AutopilotState) -> Literal["direct_route", "decompose"]:
+    """
+    Determi...
+  [Executor] parallel fan-out across 4 nodes
+  [Executor/exec-forge-t1] 1166 chars in 6.0s
+  [Executor/exec-forge-npu/P1] 1239 chars in 7.6s
+  [Executor/exec-hearth] 1500 chars in 12.5s
+  [Executor/exec-bifrost] 1257 chars in 14.8s
+  [Executor/exec-forge-npu/P2] 1324 chars total in 19.1s
+  [Evaluator/exec-forge-t1] 336 chars (80.6s) -> ACCEPT
+  [Apply/exec-forge-t1] Spliced isolated function route_after_gate into autopilot_graph.py
+  [Cycle 10] ACCEPTED via exec-forge-t1 (primary, 6.0s)
+
+============================================================
+  SESSION COMPLETE: 5/10 accepted
+============================================================

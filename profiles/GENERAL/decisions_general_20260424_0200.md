@@ -927,3 +927,85 @@ def _run_async(coro):
 **Evaluator:** All parallel candidates rejected: exec-forge-t1:reject, exec-hearth:reject, exec-bifrost:syntax, exec-forge-npu:reject
 
 **Accepted:** NO
+
+## Cycle 9 -- 2026-04-24 07:48:54 UTC
+**Proposal:** Add a type hint to the return type to clarify that the function returns a string. Improves the clarity of the function's purpose and expected output.  The improvement is safe because it does not change the function's behavior.
+```python
+def _extract_code(text: str) -> str:
+    """Extract fenced code blocks; fall back to full text if none found."""
+    if text is None:
+        raise ValueError("Input text cannot be None. Please ensure that a string value is provided.")
+    if _re is None:
+        raise ImportError(
+            "The `re` module is required for `_extract_code` function. "
+            "Please ensure that the 're' module is available and correctly imported in the scope where this function is called."
+        )
+    log.debug(f"Input text: {text}")
+    _B = chr(96) * 3  # type: s
+
+**Executor output:** 706 chars
+
+**Evaluator:** [exec-forge-t1/primary] FAIL
+The proposed change is a no-op; the return type hint `-> str` is already present in the original function, so no actual improvement or change has been made.
+
+VERDICT: REJECT
+REASON: The change is a no-op as the return type hint is already present in the original code.
+
+**Accepted:** NO
+
+## Cycle 9 -- 2026-04-24 07:49:18 UTC
+**Proposal:** Add a type hint to the return type to clarify that the function returns a string. Improves the clarity of the function's purpose and expected output.  The improvement is safe because it does not change the function's behavior.
+```python
+def _extract_code(text: str) -> str:
+    """Extract fenced code blocks; fall back to full text if none found."""
+    if text is None:
+        raise ValueError("Input text cannot be None. Please ensure that a string value is provided.")
+    if _re is None:
+        raise ImportError(
+            "The `re` module is required for `_extract_code` function. "
+            "Please ensure that the 're' module is available and correctly imported in the scope where this function is called."
+        )
+    log.debug(f"Input text: {text}")
+    _B = chr(96) * 3  # type: s
+
+**Executor output:** 724 chars
+
+**Evaluator:** [exec-hearth/primary] PASS
+The change expands the docstring to include information about the return value, which is an allowed modification type. Although the description claims to add a type hint to the return type, the return type hint `-> str` was already present in the original code; however, the actual code change is a valid docstring expansion and does not alter the function's logic or signature.
+
+VERDICT: ACCEPT
+
+**Accepted:** YES
+
+## Cycle 10 -- 2026-04-24 07:54:03 UTC
+**Proposal:** Add logging to check when state is not in DIRECT_ROUTE.
+
+This improves traceability and debugging — log the status if it is not "DIRECT_ROUTE" — helps in identifying unexpected states.
+
+```python
+def route_after_gate(state: AutopilotState) -> Literal["direct_route", "decompose"]:
+    """
+    Determine the next route based on the status in the AutopilotState.
+
+    Args:
+        state (AutopilotState): The current state of the autopilot.
+
+    Returns:
+        Literal["direct_route", "decompose"]: The next route ('direct_route' or 'decompose').
+    """
+    status = state.get("status")
+    if status is None:
+        log.error(f"AutopilotState is in an unexpected state: 'status' key is missing. Defaulting to 'decompose'. Received state: {state}", extra={"state": state})
+        return "decompos
+
+**Executor output:** 1166 chars
+
+**Evaluator:** [exec-forge-t1/primary] PASS
+The change adds a `log.debug` statement to provide more detailed information (the `state` dictionary) when the `status` is not `"DIRECT_ROUTE"`. This is a valid logging addition that follows the existing logging pattern in the function and does not introduce any breaking changes, new imports, or prohibited logic.
+
+VERDICT: ACCEPT
+
+**Accepted:** YES
+
+## Run Summary -- 2026-04-24 07:55 UTC
+Accepted: 5/10 | Models: mistral-small3.1:24b -> mistral:7b-instruct-v0.3 -> bifrost-t2-gemma4

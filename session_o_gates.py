@@ -85,7 +85,7 @@ def gate_3_runtime_smoke() -> tuple[bool, str]:
         timeout=30,
     )
     if code != 0:
-        return False, f"runtime_smoke: docker run failed {err.strip()[:200]}"
+        return False, f"runtime_smoke: docker run failed {(err.strip().splitlines() or [''])[-1][:300]}"
 
     try:
         # Give it a beat to boot

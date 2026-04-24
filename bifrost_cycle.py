@@ -56,7 +56,7 @@ ACTIVE_EXECUTOR_FLEET: list[dict] = []  # populated by load_profile when profile
 
 def call_llm(url: str, model: str, system: str, user: str,
              num_ctx: int = 8192, temperature: float | None = None,
-             max_tokens: int = 1500) -> str:
+             max_tokens: int = 1500, timeout: int | None = None) -> str:
     """Call an Ollama/llama-server endpoint.
 
     Fix 1: Ollama defaults num_predict=128, which truncates proposer/executor
@@ -77,7 +77,7 @@ def call_llm(url: str, model: str, system: str, user: str,
         "options": {"num_ctx": num_ctx, "num_predict": max_tokens},
         "keep_alive": "15m",
     }
-    r = httpx.post(url, json=payload, timeout=TIMEOUT)
+    r = httpx.post(url, json=payload, timeout=timeout if timeout is not None else TIMEOUT)
     r.raise_for_status()
     data = r.json()
     choice = data["choices"][0]
@@ -818,15 +818,19 @@ def run_cycle(cycle_num: int, objective: str, target_path: str,
                     f"PASS or FAIL?"
                 )
             t_eval = time.time()
+            print(f"  [Evaluator/{label}] dispatching model={EVALUATOR_MODEL} url={EVALUATOR_URL}", flush=True)
             try:
                 # max_tokens=4096: evaluator is a reasoning model
                 # (bifrost-t2-gemma4) whose `reasoning` field consumes 3-7x
                 # the tokens of `content`. 1500 was exhausted by reasoning
                 # on harder candidates, leaving content empty -> eval-empty.
+                # timeout=300: per-call cap prevents one hung evaluator from
+                # exhausting the 60min profile cap (4/24 CODING TIMEOUT).
                 evaluation = call_llm(
                     EVALUATOR_URL, EVALUATOR_MODEL,
                     eval_system, eval_user,
                     num_ctx=ACTIVE_NUM_CTX, max_tokens=4096,
+                    timeout=300,
                 )
             except Exception as e:
                 rejection_reasons.append(f"{label}:eval-err")

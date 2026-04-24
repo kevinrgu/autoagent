@@ -17,6 +17,37 @@ import time
 from datetime import datetime
 from pathlib import Path
 
+
+def _capture_ollama_state(label: str, run_id: str) -> None:
+    """Snapshot ollama ps on all 3 nodes. Observe-only, no behavioral change.
+
+    Output: L:/temp/ollama_telemetry/<run_id>/<label>_<node>.txt
+    """
+    import subprocess as _sp
+    from datetime import datetime as _dt
+    from pathlib import Path as _P
+
+    out_dir = _P(r"L:/temp/ollama_telemetry") / run_id
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    nodes = [
+        ("bifrost", ["ollama", "ps"]),
+        ("hearth",  ["C:/Program Files/Git/usr/bin/ssh.exe", "jhpri@192.168.2.4", "ollama ps"]),
+        ("forge",   ["C:/Program Files/Git/usr/bin/ssh.exe", "jhpritch@192.168.2.50", "ollama ps"]),
+    ]
+    timestamp = _dt.now().isoformat(timespec="seconds")
+    for node, cmd in nodes:
+        try:
+            r = _sp.run(
+                cmd, capture_output=True, text=True,
+                encoding="utf-8", errors="replace", timeout=20,
+            )
+            content = f"# {timestamp} {label} {node}\n{r.stdout}\n--- stderr ---\n{r.stderr}\n"
+        except Exception as e:
+            content = f"# {timestamp} {label} {node}\nERROR: {e}\n"
+        (out_dir / f"{label}_{node}.txt").write_text(content, encoding="utf-8")
+
+
 import httpx
 import pk_sync
 import telegram_notify
@@ -282,8 +313,10 @@ def main():
         stdout_log_path = str(make_stdout_log_path(profile, run_stamp))
         print(f"  Decisions: {decisions_path}")
 
+        _capture_ollama_state(f"before_{profile}", run_stamp)
         result = run_profile(profile, args.cycles_per_profile, args.timeout,
                              decisions_path, stdout_log_path)
+        _capture_ollama_state(f"after_{profile}", run_stamp)
         results.append(result)
         print(f"\n  >> {profile}: rc={result['returncode']} "
               f"elapsed={result['elapsed_s']}s "

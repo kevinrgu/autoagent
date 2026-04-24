@@ -108,15 +108,53 @@ def read_file(path: str) -> str:
 
 
 def strip_fences(text: str) -> str:
-    text = text.strip()
-    text = re.sub(r"^```(?:python|py)?\s*\n?", "", text)
-    text = re.sub(r"\n?```\s*$", "", text)
-    text = text.strip()
-    # Strip prose before first 'def ' or 'async def ' line
-    match = re.search(r"^(async\s+)?def\s+", text, re.MULTILINE)
+    """Strip markdown fences and trailing garbage from LLM code output.
+
+    Three-stage approach:
+    1. Strip leading/trailing markdown fences via regex (handles clean cases)
+    2. If result parses as Python, return it
+    3. Progressive AST-parse truncation: shrink from end line-by-line until
+       a prefix parses cleanly. Handles mid-string close fences and trailing
+       prose like "explanation here" that the regex misses.
+
+    If no prefix parses, returns the regex-stripped result and lets downstream
+    syntax checking catch the failure.
+    """
+    if not text:
+        return text
+
+    stripped = text.strip()
+    stripped = re.sub(r"^```(?:python|py)?\s*\n?", "", stripped, count=1)
+    stripped = re.sub(r"\n?```\s*$", "", stripped, count=1)
+    stripped = stripped.strip()
+
+    match = re.search(r"^(async\s+)?def\s+", stripped, re.MULTILINE)
     if match and match.start() > 0:
-        text = text[match.start():]
-    return text
+        stripped = stripped[match.start():]
+
+    try:
+        ast.parse(stripped)
+        return stripped
+    except SyntaxError:
+        pass
+
+    lines = stripped.splitlines()
+    for end_idx in range(len(lines), 0, -1):
+        candidate = "\n".join(lines[:end_idx])
+        try:
+            ast.parse(candidate)
+            truncated = len(stripped) - len(candidate)
+            if truncated > 0:
+                import sys as _sys
+                print(
+                    f"[strip_fences] truncated {truncated} trailing chars to reach parsable prefix",
+                    file=_sys.stderr, flush=True,
+                )
+            return candidate
+        except SyntaxError:
+            continue
+
+    return stripped
 
 
 def apply_diff(original: str, diff_text: str) -> str | None:

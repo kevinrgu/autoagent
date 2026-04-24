@@ -682,7 +682,15 @@ def execute_parallel(
         fn_name = target_fn["name"] if target_fn else "the function"
         refine_sys = (
             "You are a Python code reviewer. Fix issues in the provided "
-            "function implementation."
+            "function implementation. "
+            "Reproduce the function body VERBATIM except the specific lines "
+            "implementing the proposer's suggestion. Do NOT modify imports. "
+            "Do NOT rename the target function. Do NOT introduce helper "
+            "functions that are not already imported or defined. Do NOT "
+            "restructure control flow (no loop->comprehension, no if->ternary, "
+            "no early-return rewrites). If the change cannot land cleanly "
+            "within these constraints, output exactly "
+            "CANNOT_APPLY_WITHOUT_SCOPE_CREEP and nothing else."
         )
         refine_usr = (
             f"Fix this Python function implementation. Requirements:\n"
@@ -698,6 +706,9 @@ def execute_parallel(
                 num_ctx=num_ctx, max_tokens=1500,
             )
             elapsed = time.time() - t0
+            if refined and refined.strip().startswith("CANNOT_APPLY_WITHOUT_SCOPE_CREEP"):
+                print(f"  [Executor/{label}/P2] refiner declined: scope_creep_decline ({elapsed:.1f}s)")
+                return (label, "", elapsed, "two_pass")
             code = strip_fences(refined).strip() if refined else raw
             print(f"  [Executor/{label}/P2] {len(code)} chars total in {elapsed:.1f}s")
             return (label, code, elapsed, "two_pass")

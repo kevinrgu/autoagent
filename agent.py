@@ -26,8 +26,18 @@ from harbor.models.agent.context import AgentContext
 # ============================================================================
 
 SYSTEM_PROMPT = "You are an agent that executes tasks"
-MODEL = "gpt-5"
-MAX_TURNS = 30
+MAX_TURNS = 15
+
+# Multi-LLM configuration via LiteLLM
+# Set environment variables before running:
+# - LLM_PROVIDER: "openai", "anthropic", "ollama", "azure", etc.
+# - MODEL: model name (e.g., "gpt-5", "claude-3-5-sonnet", "qwen3.5:35b-a3b-q8_0")
+# - LLM_BASE_URL: optional base URL (required for Ollama, Azure, etc.)
+# - API_KEY: provider-specific API key (e.g., OPENAI_API_KEY, ANTHROPIC_API_KEY)
+import os
+LLM_PROVIDER = os.getenv("LLM_PROVIDER", "openai").lower()
+MODEL = os.getenv("MODEL", "gpt-5")
+LLM_BASE_URL = os.getenv("LLM_BASE_URL")
 
 
 def create_tools(environment: BaseEnvironment) -> list[FunctionTool]:
@@ -53,11 +63,25 @@ def create_tools(environment: BaseEnvironment) -> list[FunctionTool]:
 def create_agent(environment: BaseEnvironment) -> Agent:
     """Build the agent. Modify to add handoffs, sub-agents, or agent-as-tool."""
     tools = create_tools(environment)
+    
+    # Build LiteLLM-compatible model string
+    if LLM_PROVIDER == "ollama":
+        # Ollama uses custom base URL format
+        model_string = f"ollama_chat/{MODEL}" if not LLM_BASE_URL else f"ollama_chat/{MODEL}"
+    elif LLM_PROVIDER == "azure":
+        # Azure uses deployment name format
+        model_string = f"azure/{MODEL}"
+    elif LLM_PROVIDER == "anthropic":
+        model_string = f"anthropic/{MODEL}"
+    else:
+        # Default to OpenAI format
+        model_string = MODEL
+    
     return Agent(
         name="autoagent",
         instructions=SYSTEM_PROMPT,
         tools=tools,
-        model=MODEL,
+        model=model_string,
     )
 
 

@@ -1,7 +1,5 @@
 <p align="center">
-  <a href="https://www.thirdlayer.inc">
-    <img src="https://www.thirdlayer.inc/thirdlayer-logo.svg" alt="thirdlayer" width="200">
-  </a>
+  <img src="docs/logo.png" alt="open-autoagent" width="160">
 </p>
 
 <blockquote>
@@ -207,4 +205,3 @@ You can equip the agent with [Agent Skills for Context Engineering](https://gith
 ## License
 
 MIT
-

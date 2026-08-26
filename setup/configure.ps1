@@ -81,7 +81,7 @@ $config.hardware = if ($input) { $input } else { $default }
 # Save config
 $config | ConvertTo-Json | Out-File -Encoding UTF8 $ConfigFile
 Write-Host ""
-Write-Host "  ✓ Saved to: $ConfigFile" -ForegroundColor Green
+Write-Host "  OK Saved to: $ConfigFile" -ForegroundColor Green
 Write-Host ""
 Write-Host "  Next: run .\setup\install.ps1" -ForegroundColor Cyan
 Write-Host ""

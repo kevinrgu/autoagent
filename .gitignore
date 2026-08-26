@@ -21,4 +21,7 @@ tasks-sheets-verified/
 tasks-sheets/
 
 dev/
+.cursor/rules/jcodemunch.mdc
+uv.lock
+
 /.vs

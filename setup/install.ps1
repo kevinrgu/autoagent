@@ -38,7 +38,7 @@ if (Test-Path $ConfigFile) {
     $domainBranch = "domain/secure-torrent"
 }
 
-# ── menu ──────────────────────────────────────────────────────────────────────
+# -- menu ----------------------------------------------------------------------
 Write-Host ""
 Write-Host "  open-autoagent-ollama-setup  --  Skill Installer" -ForegroundColor Cyan
 Write-Host "  --------------------------------------------------" -ForegroundColor DarkGray
@@ -60,7 +60,7 @@ while ($choice -notmatch '^[1-7]$') {
     $choice = (Read-Host "  Enter number [1-7]").Trim()
 }
 
-# ── resolve harness name and install path ─────────────────────────────────────
+# -- resolve harness name and install path -------------------------------------
 switch ($choice) {
     "1" {
         $Harness   = "hermes"
@@ -92,7 +92,7 @@ switch ($choice) {
     }
 }
 
-# ── locate and process source ────────────────────────────────────────────────
+# -- locate and process source ------------------------------------------------
 $SourceFile = Join-Path $HarnessDir "$Harness\SKILL.md"
 
 # Fall back to template-based generation if no harness-specific file exists
@@ -121,7 +121,7 @@ if (-not (Test-Path $SourceFile)) {
     exit 1
 }
 
-# ── confirm ───────────────────────────────────────────────────────────────────
+# -- confirm -------------------------------------------------------------------
 Write-Host ""
 Write-Host "  Harness : $Harness" -ForegroundColor Yellow
 Write-Host "  Source  : $SourceFile" -ForegroundColor DarkGray
@@ -136,7 +136,7 @@ if ($confirm -match '^[Nn]') {
     exit 0
 }
 
-# ── install ───────────────────────────────────────────────────────────────────
+# -- install -------------------------------------------------------------------
 New-Item -ItemType Directory -Force -Path $TargetDir | Out-Null
 Copy-Item -Path $SourceFile -Destination (Join-Path $TargetDir "SKILL.md") -Force
 
@@ -146,10 +146,10 @@ if ($SourceFile -match '\\Temp\\') {
 }
 
 Write-Host ""
-Write-Host "  ✓ Installed: $TargetDir\SKILL.md" -ForegroundColor Green
+Write-Host "  OK Installed: $TargetDir\SKILL.md" -ForegroundColor Green
 Write-Host ""
 
-# ── trigger instructions ──────────────────────────────────────────────────────
+# -- trigger instructions ------------------------------------------------------
 Write-Host "  Next: open $Harness and run the skill:" -ForegroundColor Cyan
 switch ($Harness) {
     "hermes"         { Write-Host "    Start a new session (or /reset), then paste:" ; Write-Host "      run open-autoagent-ollama-setup" }
@@ -166,6 +166,9 @@ switch ($Harness) {
         Write-Host "    In Copilot Chat (View > GitHub Copilot Chat), attach the file then ask:"
         Write-Host "      #file:.github\skills\$SkillName\SKILL.md"
         Write-Host "      run open-autoagent-ollama-setup"
+    }
+    default {
+        throw "Unknown harness '$Harness'. Add a folder under setup\harness\ and a matching arm here."
     }
 }
 Write-Host ""

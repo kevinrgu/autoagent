@@ -1,0 +1,180 @@
+#!/usr/bin/env bash
+# SKILL.md.template — Template for open-autoagent-ollama-setup skill
+#
+# This file is processed by install.sh to inject custom repo/model/hardware info.
+# Placeholders: {{MAIN_REPO}}, {{DOMAIN_REPO}}, {{DOMAIN_BRANCH}}, {{MODEL}}, {{OLLAMA_ENDPOINT}}, {{HARDWARE}}
+
+---
+name: open-autoagent-ollama-setup
+description: Set up {{MAIN_REPO}} on {{HARDWARE}}. Use when the user says set up open-autoagent, wire Ollama into AutoAgent, run Harbor, or work with the domain branch. Do not use for torrent MCP or download-orchestrator only.
+license: MIT
+metadata:
+  hermes:
+    tags:
+      - open-autoagent
+      - ollama
+      - harbor
+      - harness
+    category: mcp-install
+  version: "1.0.0"
+  hardware: {{HARDWARE}}
+  model: {{MODEL}}
+---
+
+# Set up open-autoagent on host-native Ollama
+
+You are running this procedure on the operator machine. Execute the steps
+in order. Stop on the first failed check.
+
+## Locked settings from the project session
+
+| Key | Value |
+|---|---|
+| Repo | `{{MAIN_REPO}}` |
+| Domain catalog | `{{DOMAIN_REPO}}` |
+| Domain branch | `{{DOMAIN_BRANCH}}` |
+| LLM provider | `ollama` |
+| Model tag | `{{MODEL}}` |
+| Ollama bind | `{{OLLAMA_ENDPOINT}}` |
+| Hardware | {{HARDWARE}} |
+
+## Preconditions
+
+1. Workspace parent. Default `~/src`.
+2. Confirm Ollama is installed and model `{{MODEL}}` is pulled.
+3. Confirm Docker Desktop or Engine is installed.
+4. Confirm `git`, `curl`, and Python 3.10+ exist.
+
+## Step 1 — host toolchain
+
+Run and record output.
+
+\`\`\`bash
+uname -a
+command -v git
+command -v curl
+command -v python3
+command -v docker
+command -v uv || true
+command -v ollama
+ollama --version
+docker version --format '{{.Server.Version}}' 2>/dev/null || docker version
+\`\`\`
+
+Install uv if missing:
+
+\`\`\`bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+export PATH="$HOME/.local/bin:$PATH"
+\`\`\`
+
+Fail if \`ollama\` or \`docker\` is missing.
+
+## Step 2 — native Ollama health
+
+\`\`\`bash
+curl -sf {{OLLAMA_ENDPOINT}}/api/tags >/tmp/ollama-tags.json
+python3 - << 'PY'
+import json
+tags = json.load(open("/tmp/ollama-tags.json"))
+names = [m.get("name") for m in tags.get("models", [])]
+print("models:", names)
+need = "{{MODEL}}"
+ok = any(n == need or n.startswith(need) for n in names)
+print("have_target:", ok)
+raise SystemExit(0 if ok else 2)
+PY
+\`\`\`
+
+If the model is missing:
+
+\`\`\`bash
+ollama pull {{MODEL}}
+\`\`\`
+
+## Step 3 — clone repos
+
+\`\`\`bash
+SRC="${SRC:-$HOME/src}"
+mkdir -p "$SRC"
+cd "$SRC"
+
+git clone {{MAIN_REPO}}.git open-autoagent
+git clone {{DOMAIN_REPO}}.git secure-torrent-mcp-agent
+cd "$SRC/open-autoagent"
+git checkout main && git pull
+git checkout -b {{DOMAIN_BRANCH}} || git checkout {{DOMAIN_BRANCH}}
+
+mkdir -p vendor docs/domain
+rsync -a --delete --exclude .git "$SRC/secure-torrent-mcp-agent/" vendor/secure-torrent-mcp-agent/
+\`\`\`
+
+## Step 4 — write \`.env\`
+
+\`\`\`bash
+cd "$SRC/open-autoagent"
+cat > .env << 'EOF'
+LLM_PROVIDER=ollama
+MODEL={{MODEL}}
+LLM_BASE_URL={{OLLAMA_ENDPOINT}}
+OLLAMA_API_BASE={{OLLAMA_ENDPOINT}}
+EOF
+
+if ! grep -q '^\.env$' .gitignore 2>/dev/null; then
+  printf '\n.env\nresults.tsv\njobs/\nrun.log\n' >> .gitignore
+fi
+
+set -a && . ./.env && set +a
+\`\`\`
+
+## Step 5 — Python env and Docker base image
+
+\`\`\`bash
+cd "$SRC/open-autoagent"
+uv sync
+docker build -f Dockerfile.base -t autoagent-base .
+\`\`\`
+
+Confirm the agent module imports:
+
+\`\`\`bash
+cd "$SRC/open-autoagent"
+set -a && . ./.env && set +a
+uv run python - << 'PY'
+import os
+print("LLM_PROVIDER", os.environ.get("LLM_PROVIDER"))
+print("MODEL", os.environ.get("MODEL"))
+print("LLM_BASE_URL", os.environ.get("LLM_BASE_URL"))
+import agent
+print("import_ok")
+PY
+\`\`\`
+
+## Step 6 — first Harbor run (baseline)
+
+\`\`\`bash
+cd "$SRC/open-autoagent"
+set -a && . ./.env && set +a
+rm -rf jobs
+mkdir -p jobs
+uv run harbor run -p tasks/ -l 1 -n 1 \
+  --agent-import-path agent:AutoAgent -o jobs --job-name latest \
+  > run.log 2>&1 || true
+\`\`\`
+
+Check output:
+
+\`\`\`bash
+tail -n 40 run.log
+ls jobs | head
+\`\`\`
+
+## Done
+
+The setup is complete when:
+- Ollama returns the model tag
+- Docker base image built successfully
+- Agent module imports with the correct provider and model
+- At least one Harbor command ran (even if tasks don't exist yet)
+
+Next: Point a coding agent at \`program.md\` to run experiments.

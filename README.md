@@ -64,6 +64,34 @@ rm -rf jobs; mkdir -p jobs && uv run harbor run -p tasks/ --task-name "<task-nam
 rm -rf jobs; mkdir -p jobs && uv run harbor run -p tasks/ -n 100 --agent-import-path agent:AutoAgent -o jobs --job-name latest > run.log 2>&1
 ```
 
+## Install quickly with an AI harness
+
+The `setup/` folder installs a skill that lets your AI harness run the full
+Ollama setup for you — clone, `.env`, `uv sync`, Docker base image, Harbor
+smoke test.
+
+```bash
+# Linux / macOS / Git Bash
+bash setup/install.sh
+
+# Windows PowerShell
+.\setup\install.ps1
+```
+
+Pick your harness when prompted, then trigger it:
+
+| Harness | Trigger |
+|---|---|
+| Hermes | New session (or `/reset`) → `run open-autoagent-ollama-setup` |
+| Claude Code | In chat: `run open-autoagent-ollama-setup` |
+| Claude Desktop | In chat: `run open-autoagent-ollama-setup` |
+| Cursor | In chat: `run open-autoagent-ollama-setup` |
+| Grok | In chat: `run open-autoagent-ollama-setup` |
+| VS Code + Copilot | `Ctrl+Shift+I` → `#file:.vscode/skills/open-autoagent-ollama-setup/SKILL.md` → `run open-autoagent-ollama-setup` |
+| Visual Studio | `View > GitHub Copilot Chat` → `#file:.github/skills/open-autoagent-ollama-setup/SKILL.md` → `run open-autoagent-ollama-setup` |
+
+The harness will execute every step and stop if a check fails.
+
 ## Multi-LLM Support
 
 The harness supports multiple LLM providers via [LiteLLM](https://github.com/BerriAI/litellm). Configure via environment variables:

@@ -1,0 +1,17 @@
+{
+  "mainRepo": "https://github.com/Oncorporation/open-autoagent",
+  "domainRepo": "https://github.com/Oncorporation/secure-torrent-mcp-agent",
+  "domainBranch": "domain/secure-torrent",
+  "llmProvider": "ollama",
+  "model": "qwen3.8:27b-mtp-q8_0",
+  "ollamaEndpoint": "http://127.0.0.1:11434",
+  "hardware": "AMD Ryzen AI Max+ 395 64GB-64GB",
+  "skillMetadata": {
+    "name": "open-autoagent-ollama-setup",
+    "description": "Set up Oncorporation open-autoagent on a host-native Ollama daemon for Harbor harness experiments.",
+    "license": "MIT",
+    "version": "1.0.0",
+    "hermesTags": ["open-autoagent", "ollama", "harbor", "harness"],
+    "hermesCategory": "mcp-install"
+  }
+}

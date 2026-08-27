@@ -9,4 +9,5 @@ dependencies = [
     "openpyxl",
     "numpy",
     "harbor",
+    "litellm>=1.60.0",
 ]

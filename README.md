@@ -1,7 +1,5 @@
 <p align="center">
-  <a href="https://www.thirdlayer.inc">
-    <img src="https://www.thirdlayer.inc/thirdlayer-logo.svg" alt="thirdlayer" width="200">
-  </a>
+  <img src="docs/logo.png" alt="open-autoagent" width="160">
 </p>
 
 <blockquote>
@@ -65,6 +63,88 @@ rm -rf jobs; mkdir -p jobs && uv run harbor run -p tasks/ --task-name "<task-nam
 # 7. Run all tasks in parallel (-n = concurrency, default 4)
 rm -rf jobs; mkdir -p jobs && uv run harbor run -p tasks/ -n 100 --agent-import-path agent:AutoAgent -o jobs --job-name latest > run.log 2>&1
 ```
+
+## Install quickly with an AI harness
+
+The `setup/` folder installs a skill that lets your AI harness run the full
+Ollama setup for you — clone, `.env`, `uv sync`, Docker base image, Harbor
+smoke test.
+
+```bash
+# Linux / macOS / Git Bash
+bash setup/install.sh
+
+# Windows PowerShell
+.\setup\install.ps1
+```
+
+Pick your harness when prompted, then trigger it:
+
+| Harness | Trigger |
+|---|---|
+| Hermes | New session (or `/reset`) → `run open-autoagent-ollama-setup` |
+| Claude Code | In chat: `run open-autoagent-ollama-setup` |
+| Claude Desktop | In chat: `run open-autoagent-ollama-setup` |
+| Cursor | In chat: `run open-autoagent-ollama-setup` |
+| Grok | In chat: `run open-autoagent-ollama-setup` |
+| VS Code + Copilot | `Ctrl+Shift+I` → `#file:.vscode/skills/open-autoagent-ollama-setup/SKILL.md` → `run open-autoagent-ollama-setup` |
+| Visual Studio | `View > GitHub Copilot Chat` → `#file:.github/skills/open-autoagent-ollama-setup/SKILL.md` → `run open-autoagent-ollama-setup` |
+
+The harness will execute every step and stop if a check fails.
+
+## Multi-LLM Support
+
+The harness supports multiple LLM providers via [LiteLLM](https://github.com/BerriAI/litellm). Configure via environment variables:
+
+### Environment Variables
+
+- `LLM_PROVIDER`: Provider name (`openai`, `anthropic`, `ollama`, `azure`, etc.)
+- `MODEL`: Model name (e.g., `gpt-5`, `claude-3-5-sonnet`, `qwen3.5:35b-a3b-q8_0`)
+- `LLM_BASE_URL`: Optional base URL (required for Ollama, Azure, etc.)
+- `API_KEY`: Provider-specific API key (e.g., `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`)
+
+### Using Local Ollama
+
+```bash
+cat > .env << 'EOF'
+LLM_PROVIDER=ollama
+MODEL=qwen3.5:35b-a3b-q8_0
+LLM_BASE_URL=http://host.docker.internal:11434/v1
+EOF
+```
+
+### Using OpenAI
+
+```bash
+cat > .env << 'EOF'
+LLM_PROVIDER=openai
+MODEL=gpt-5
+OPENAI_API_KEY=your-api-key
+EOF
+```
+
+### Using Anthropic
+
+```bash
+cat > .env << 'EOF'
+LLM_PROVIDER=anthropic
+MODEL=claude-3-5-sonnet
+ANTHROPIC_API_KEY=your-api-key
+EOF
+```
+
+### Using Azure
+
+```bash
+cat > .env << 'EOF'
+LLM_PROVIDER=azure
+MODEL=your-deployment-name
+AZURE_API_KEY=your-api-key
+AZURE_API_BASE=https://your-resource.openai.azure.com
+EOF
+```
+
+The model selection is optional and can be changed dynamically by modifying the environment variables before running the benchmark.
 
 ## Running the meta-agent
 
@@ -153,4 +233,3 @@ You can equip the agent with [Agent Skills for Context Engineering](https://gith
 ## License
 
 MIT
-
